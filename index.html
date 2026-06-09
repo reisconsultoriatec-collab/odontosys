@@ -1,0 +1,2127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OdontoSystem</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#f0f4f8;color:#1a1a2e;min-height:100vh}
+#loading-overlay{display:none;position:fixed;inset:0;background:rgba(26,35,126,.9);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+#loading-overlay.show{display:flex}
+.spinner{width:44px;height:44px;border:4px solid rgba(255,255,255,.2);border-top-color:#90caf9;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:#fff;font-size:14px;opacity:.85}
+#login-screen{display:none;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1a237e 0%,#1565C0 50%,#0288d1 100%);padding:20px}
+#login-screen.show{display:flex}
+.login-box{background:#fff;border-radius:20px;padding:40px 36px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.login-logo{text-align:center;margin-bottom:28px}
+.login-logo i{font-size:48px;color:#1565C0}
+.login-logo h1{font-size:22px;font-weight:700;color:#1a237e;margin-top:8px}
+.login-logo p{font-size:13px;color:#78909c;margin-top:4px}
+.login-tabs{display:flex;border-bottom:2px solid #e0e0e0;margin-bottom:20px}
+.login-tab{flex:1;padding:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:none;color:#78909c;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s}
+.login-tab.active{color:#1565C0;border-bottom-color:#1565C0}
+.login-pane{display:none}.login-pane.active{display:block}
+.login-field{margin-bottom:14px}
+.login-field label{font-size:12px;font-weight:600;color:#546e7a;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px}
+.login-field input{width:100%;padding:11px 14px;border:1.5px solid #cfd8dc;border-radius:10px;font-size:14px;color:#1a1a2e;outline:none;transition:.15s;font-family:inherit}
+.login-field input:focus{border-color:#1565C0;box-shadow:0 0 0 3px rgba(21,101,192,.12)}
+.login-btn{width:100%;padding:13px;background:#1565C0;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:.15s;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:8px}
+.login-btn:hover:not(:disabled){background:#0d47a1}
+.login-btn:disabled{background:#90caf9;cursor:not-allowed}
+.login-btn.green{background:#2e7d32}.login-btn.green:hover:not(:disabled){background:#1b5e20}
+.login-error{background:#ffebee;color:#c62828;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none;align-items:center;gap:8px}
+.login-error.show{display:flex}
+.login-success{background:#e8f5e9;color:#2e7d32;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none;align-items:center;gap:8px}
+.login-success.show{display:flex}
+.login-footer{text-align:center;margin-top:16px;font-size:12px;color:#a0aab4}
+.reset-link{text-align:center;margin-top:10px;font-size:12px;color:#1565C0;cursor:pointer;text-decoration:underline}
+.cfg-info{background:#e3f2fd;border:1px solid #90caf9;border-radius:10px;padding:14px;margin-bottom:16px;font-size:12px;color:#1565C0}
+.cfg-info h4{font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.cfg-info code{background:#fff;padding:2px 6px;border-radius:4px;font-size:11px;border:1px solid #90caf9;display:inline-block;margin:2px 0}
+#cfg-banner{background:#fff3e0;border:1px solid #ffcc80;border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;color:#e65100;display:none}
+#cfg-banner.show{display:block}
+#cfg-banner h4{font-weight:700;margin-bottom:4px}
+#cfg-banner code{background:#fff8e1;padding:1px 5px;border-radius:3px;font-size:12px}
+#app{display:none}
+#app.show{display:block}
+.sidebar{position:fixed;top:0;left:0;width:224px;height:100vh;background:#1a237e;color:#fff;display:flex;flex-direction:column;z-index:300;overflow-y:auto;transition:transform .25s}
+.logo{padding:16px;border-bottom:1px solid rgba(255,255,255,.15);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo i{font-size:26px;color:#90caf9}
+.logo span{font-size:15px;font-weight:600;line-height:1.2}
+.logo small{display:block;font-size:11px;opacity:.6;font-weight:400}
+nav{flex:1;padding:10px 0;overflow-y:auto}
+nav a{display:flex;align-items:center;gap:10px;padding:9px 16px;color:rgba(255,255,255,.75);text-decoration:none;font-size:13px;border-left:3px solid transparent;transition:.15s;cursor:pointer;user-select:none}
+nav a:hover{color:#fff;background:rgba(255,255,255,.08)}
+nav a.active{color:#fff;background:rgba(255,255,255,.12);border-left-color:#90caf9}
+nav a i{font-size:17px;min-width:22px}
+.nav-section{font-size:11px;text-transform:uppercase;color:rgba(255,255,255,.85);padding:12px 16px 5px;letter-spacing:1px;font-weight:800;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;border-radius:6px;margin:0 4px;transition:background .15s}
+.nav-section:hover{background:rgba(255,255,255,.08)}
+.nav-section::before{content:'';display:inline-block;width:3px;height:12px;border-radius:2px;background:#90caf9;flex-shrink:0}
+.nav-section .nav-arrow{margin-left:auto;font-size:13px;transition:transform .25s;opacity:.7}
+.nav-section.collapsed .nav-arrow{transform:rotate(-90deg)}
+.nav-group-items{overflow:hidden;transition:max-height .3s ease,opacity .3s ease;max-height:500px;opacity:1}
+.nav-group-items.collapsed{max-height:0;opacity:0}
+.sidebar-user{padding:12px 16px;border-top:1px solid rgba(255,255,255,.15);display:flex;align-items:center;gap:10px}
+.sidebar-user-info{flex:1;min-width:0}
+.sidebar-user-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-user-role{font-size:10px;opacity:.6;margin-top:1px}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:299}
+.sidebar-overlay.show{display:block}
+.hamburger{display:none;flex-direction:column;justify-content:center;align-items:center;width:40px;height:40px;gap:5px;cursor:pointer;border:none;background:none;padding:4px;border-radius:8px}
+.hamburger span{display:block;width:22px;height:2px;background:#1a237e;border-radius:2px;transition:.25s}
+.hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+.topbar{background:#fff;border-bottom:1px solid #e0e0e0;padding:0 16px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+.topbar-title{font-size:18px;font-weight:800;color:#1a237e}
+.topbar-actions{display:flex;align-items:center;gap:8px}
+.avatar{width:34px;height:34px;border-radius:50%;background:#1565C0;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;cursor:pointer}
+.fb-badge{display:flex;align-items:center;gap:5px;font-size:11px;padding:4px 10px;border-radius:12px;background:#e8f5e9;color:#2e7d32}
+.fb-badge.offline{background:#fff3e0;color:#e65100}
+.main{margin-left:224px;min-height:100vh;display:flex;flex-direction:column}
+.content{padding:20px;flex:1}
+.section{display:none}.section.active{display:block}
+.card{background:#fff;border-radius:12px;border:1px solid #e0e0e0;padding:18px;margin-bottom:16px}
+.card-title{font-size:14px;font-weight:600;color:#1a237e;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-title i{font-size:18px}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.metric{background:#fff;border-radius:10px;border:1px solid #e0e0e0;padding:14px}
+.metric-label{font-size:11px;color:#78909c;margin-bottom:4px}
+.metric-val{font-size:22px;font-weight:600;color:#1a237e}
+.metric-sub{font-size:11px;color:#a0aab4;margin-top:3px}
+.metric.green .metric-val{color:#2e7d32}.metric.amber .metric-val{color:#e65100}.metric.red .metric-val{color:#c62828}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:none;font-size:13px;cursor:pointer;font-weight:500;transition:.15s;white-space:nowrap}
+.btn-primary{background:#1565C0;color:#fff}.btn-primary:hover{background:#0d47a1}
+.btn-outline{background:#fff;color:#1565C0;border:1px solid #1565C0}.btn-outline:hover{background:#e3f2fd}
+.btn-danger{background:#fff;color:#c62828;border:1px solid #c62828}.btn-danger:hover{background:#ffebee}
+.btn-success{background:#2e7d32;color:#fff}.btn-success:hover{background:#1b5e20}
+.btn-warning{background:#e65100;color:#fff}.btn-warning:hover{background:#bf360c}
+.btn-sm{padding:5px 10px;font-size:12px}
+.actions-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px}
+thead th{text-align:left;padding:10px 12px;font-weight:600;font-size:11px;color:#546e7a;border-bottom:2px solid #e0e0e0;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+tbody tr{border-bottom:1px solid #f0f0f0}
+tbody tr:hover{background:#f8fafb}
+tbody td{padding:9px 12px;vertical-align:middle}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;white-space:nowrap}
+.badge-blue{background:#e3f2fd;color:#1565C0}.badge-green{background:#e8f5e9;color:#2e7d32}
+.badge-amber{background:#fff3e0;color:#e65100}.badge-red{background:#ffebee;color:#c62828}
+.badge-gray{background:#eceff1;color:#546e7a}.badge-purple{background:#ede7f6;color:#4527a0}
+.tag{display:inline-block;font-size:11px;padding:2px 7px;border-radius:12px;margin:2px}
+.appt-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid #e0e0e0;margin-bottom:8px;background:#fff}
+.appt-time{font-size:12px;font-weight:600;color:#1565C0;min-width:44px}
+.appt-info{flex:1;min-width:0}.appt-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.appt-proc{font-size:11px;color:#78909c}
+.appt-dot{width:9px;height:9px;border-radius:50%;min-width:9px}
+.dot-green{background:#4caf50}.dot-blue{background:#2196f3}.dot-amber{background:#ff9800}.dot-red{background:#f44336}
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.form-grid.cols-3{grid-template-columns:repeat(3,1fr)}.form-grid.col-1{grid-template-columns:1fr}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group.span-2{grid-column:span 2}.form-group.span-3{grid-column:span 3}
+label{font-size:11px;font-weight:600;color:#546e7a;text-transform:uppercase;letter-spacing:.4px}
+input[type=text],input[type=date],input[type=email],input[type=tel],input[type=number],input[type=time],input[type=password],input[type=color],input[type=month],select,textarea{padding:9px 12px;border:1px solid #cfd8dc;border-radius:8px;font-size:13px;color:#1a1a2e;background:#fff;outline:none;transition:.15s;font-family:inherit;width:100%}
+input[type=color]{padding:4px 6px;height:40px;cursor:pointer}
+input:focus,select:focus,textarea:focus{border-color:#1565C0;box-shadow:0 0 0 3px rgba(21,101,192,.12)}
+textarea{resize:vertical;min-height:76px}
+.patient-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid #e0e0e0;margin-bottom:6px;cursor:pointer;transition:.1s;background:#fff}
+.patient-row:hover{border-color:#1565C0;background:#f5f9ff}
+.patient-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#fff;min-width:36px;flex-shrink:0}
+.patient-info{flex:1;min-width:0}.patient-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.patient-sub{font-size:11px;color:#78909c}
+.tags-row{display:flex;flex-wrap:wrap;gap:3px}
+.task-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid #e0e0e0;margin-bottom:6px;background:#fff}
+.task-item.done{opacity:.5}
+.task-check{width:18px;height:18px;border-radius:5px;border:2px solid #cfd8dc;cursor:pointer;display:flex;align-items:center;justify-content:center;min-width:18px;transition:.15s;flex-shrink:0}
+.task-check.checked{background:#2e7d32;border-color:#2e7d32;color:#fff}
+.task-text{flex:1;font-size:13px;min-width:0}.task-date{font-size:11px;color:#78909c;white-space:nowrap}
+.priority{width:4px;height:28px;border-radius:2px;min-width:4px;flex-shrink:0}
+.p-high{background:#f44336}.p-med{background:#ff9800}.p-low{background:#4caf50}
+.finance-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #f0f0f0}
+.finance-row:last-child{border:none}
+.fin-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.fin-icon.in{background:#e8f5e9;color:#2e7d32}.fin-icon.out{background:#ffebee;color:#c62828}
+.fin-desc{flex:1;min-width:0}.fin-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fin-cat{font-size:11px;color:#78909c}
+.fin-val{font-size:13px;font-weight:600;white-space:nowrap}.fin-val.in{color:#2e7d32}.fin-val.out{color:#c62828}
+.stock-bar{height:6px;border-radius:3px;background:#eceff1;overflow:hidden}
+.stock-fill{height:100%;border-radius:3px}.stock-ok{background:#4caf50}.stock-warn{background:#ff9800}.stock-crit{background:#f44336}
+.pron-tab{display:flex;border-bottom:2px solid #e0e0e0;margin-bottom:14px;overflow-x:auto}
+.pron-tab-btn{padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:none;color:#78909c;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s;white-space:nowrap;flex-shrink:0}
+.pron-tab-btn.active{color:#1565C0;border-bottom-color:#1565C0}
+.pron-pane{display:none}.pron-pane.active{display:block}
+.fin-pane{display:none}.fin-pane.active{display:block}
+.doc-card{border:1px solid #e0e0e0;border-radius:10px;padding:14px 16px;background:#fff;cursor:pointer;transition:.1s;display:flex;align-items:center;gap:12px}
+.doc-card:hover{border-color:#1565C0;background:#f5f9ff}
+.doc-card i{font-size:26px;color:#1565C0;flex-shrink:0}
+.doc-card-info h4{font-size:13px;font-weight:600;color:#1a237e}
+.doc-card-info p{font-size:11px;color:#78909c;margin-top:2px}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;align-items:flex-end;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:14px 14px 0 0;padding:20px;width:100%;max-width:640px;max-height:92vh;overflow-y:auto}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.modal-head h3{font-size:15px;font-weight:600;color:#1a237e}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:#78909c;padding:4px}
+.modal-close:hover{color:#c62828}
+.receita-paper{border:1px solid #e0e0e0;border-radius:8px;padding:20px;font-size:13px;line-height:1.9;background:#fafafa}
+.receita-header{text-align:center;border-bottom:2px solid #1a237e;padding-bottom:10px;margin-bottom:14px}
+.receita-header h2{color:#1a237e;font-size:16px}
+.receita-header p{color:#546e7a;font-size:12px}
+.receita-foot{margin-top:28px;border-top:1px solid #e0e0e0;padding-top:10px;font-size:12px;color:#78909c;text-align:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-day-name{font-size:10px;color:#78909c;font-weight:600;padding:4px 0;text-align:center}
+.cal-day{padding:6px 0;font-size:12px;border-radius:6px;cursor:pointer;color:#37474f;text-align:center;position:relative}
+.cal-day:hover{background:#e3f2fd}.cal-day.today{background:#1565C0;color:#fff;font-weight:600}
+.cal-day.selected{background:#e3f2fd;font-weight:600}
+.cal-day.has-appt::after{content:'';width:4px;height:4px;background:#00897B;border-radius:50%;position:absolute;bottom:2px;left:50%;transform:translateX(-50%)}
+.cal-day.empty{opacity:0;pointer-events:none}
+.notif{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1565C0;color:#fff;padding:11px 20px;border-radius:24px;font-size:13px;z-index:600;display:none;gap:8px;align-items:center;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.notif.show{display:flex}.notif.success{background:#2e7d32}.notif.error{background:#c62828}
+.empty-state{text-align:center;padding:36px 20px;color:#78909c;font-size:13px}
+.empty-state i{font-size:36px;display:block;margin-bottom:8px;opacity:.4}
+.perm-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
+.perm-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e0e0e0;border-radius:8px;font-size:12px;cursor:pointer;transition:.1s}
+.perm-item:hover{border-color:#1565C0;background:#f5f9ff}
+.perm-item input[type=checkbox]{accent-color:#1565C0;width:15px;height:15px}
+.user-card{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+.user-card-info{flex:1;min-width:0}
+.user-card-name{font-size:13px;font-weight:600}
+.user-card-sub{font-size:11px;color:#78909c;margin-top:2px}
+.role-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.role-admin{background:#fce4ec;color:#c62828}.role-dentista{background:#e8f5e9;color:#2e7d32}
+.role-recep{background:#e3f2fd;color:#1565C0}.role-financeiro{background:#fff3e0;color:#e65100}
+.log-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-bottom:1px solid #f0f0f0;font-size:12px}
+.log-item:last-child{border:none}
+.log-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:1px}
+.log-info{flex:1;min-width:0}
+.log-action{font-weight:600;color:#1a1a2e}
+.log-meta{color:#78909c;margin-top:2px;font-size:11px}
+.log-time{font-size:11px;color:#a0aab4;white-space:nowrap;flex-shrink:0}
+.log-login{background:#e8f5e9;color:#2e7d32}.log-logout{background:#eceff1;color:#546e7a}
+.log-create{background:#e3f2fd;color:#1565C0}.log-edit{background:#fff3e0;color:#e65100}
+.log-delete{background:#ffebee;color:#c62828}.log-view{background:#f3e5f5;color:#6a1b9a}
+.access-denied{text-align:center;padding:60px 20px;color:#78909c}
+.access-denied i{font-size:52px;display:block;margin-bottom:12px;opacity:.3;color:#c62828}
+.odo-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:8px 0}
+.odo-arcade{display:flex;align-items:flex-end;justify-content:center;gap:3px;padding:4px 0}
+.odo-arcade.inferior{align-items:flex-start}
+.odo-separator{width:2px;background:#cfd8dc;height:40px;border-radius:1px;flex-shrink:0;align-self:center}
+.odo-tooth{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:4px 2px;border-radius:8px;transition:background .15s,transform .15s;flex-shrink:0;position:relative}
+.odo-tooth:hover{background:#f0f4f8;transform:scale(1.08)}
+.odo-tooth.selected{background:#e3f2fd;box-shadow:0 0 0 2px #1565C0;border-radius:8px}
+.odo-num{font-size:9px;font-weight:700;color:#90a4ae;font-family:monospace}
+.odo-obs-dot{width:6px;height:6px;border-radius:50%;background:#ff9800;position:absolute;bottom:0;left:50%;transform:translateX(-50%)}
+.odo-palette-wrap{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center}
+.odo-pal-btn{padding:5px 11px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:2px solid transparent;transition:.15s}
+.odo-pal-btn.active{border-color:#1565C0;box-shadow:0 0 0 2px rgba(21,101,192,.2)}
+.odo-legend-row{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;margin-top:12px}
+.odo-legend-dot{width:12px;height:12px;border-radius:3px;display:inline-block;vertical-align:middle;margin-right:3px;border:1px solid rgba(0,0,0,.1)}
+.plano-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:6px;background:#fff}
+.plano-item.aprovado{border-left:4px solid #2e7d32}
+.plano-item.concluido{border-left:4px solid #1565C0;opacity:.75}
+.plano-item.pendente{border-left:4px solid #ff9800}
+.plano-info{flex:1;min-width:0}
+.plano-proc{font-size:13px;font-weight:600}
+.plano-sub{font-size:11px;color:#78909c;margin-top:2px}
+.plano-val{font-size:13px;font-weight:600;color:#1a237e;white-space:nowrap}
+.aniv-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid #e0e0e0;margin-bottom:6px;background:#fff}
+.aniv-item.hoje{border-color:#e65100;background:#fff8f3}
+.aniv-date{font-size:12px;font-weight:600;color:#1565C0;min-width:44px;text-align:right}
+.aniv-age{font-size:11px;color:#78909c;margin-top:2px}
+.week-appt{border-radius:6px;padding:5px 7px;margin-bottom:3px;font-size:11px;cursor:pointer;transition:.15s;border-left:3px solid transparent}
+.week-appt:hover{filter:brightness(.95)}
+.week-appt-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.week-appt-info{color:rgba(0,0,0,.55);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.week-empty{font-size:11px;color:#cfd8dc;text-align:center;padding:16px 4px}
+.checkin-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:#fff;border:1px solid #e0e0e0;margin-bottom:5px}
+.checkin-name{flex:1;font-size:12px;font-weight:600}
+.status-btn{padding:4px 10px;border-radius:16px;font-size:11px;font-weight:600;border:none;cursor:pointer;transition:.15s}
+.sb-presente{background:#e8f5e9;color:#2e7d32}.sb-presente:hover{background:#c8e6c9}
+.sb-faltou{background:#ffebee;color:#c62828}.sb-faltou:hover{background:#ffcdd2}
+.sb-aguardando{background:#fff3e0;color:#e65100}.sb-aguardando:hover{background:#ffe0b2}
+.conta-vencido{background:#fff5f5}
+.conta-hoje{background:#fffbf0}
+.conta-alert{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ca-ok{background:#4caf50}.ca-warn{background:#ff9800}.ca-venc{background:#f44336}
+.com-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #e0e0e0;border-radius:10px;margin-bottom:8px;background:#fff}
+.com-bar{height:8px;border-radius:4px;background:#e3f2fd;overflow:hidden;margin-top:4px}
+.com-bar-fill{height:100%;border-radius:4px;background:#1565C0}
+.rel-table{width:100%;border-collapse:collapse;font-size:13px}
+.rel-table th{background:#1a237e;color:#fff;padding:8px 12px;text-align:left;font-size:12px}
+.rel-table td{padding:8px 12px;border-bottom:1px solid #f0f0f0}
+.rel-table tr:nth-child(even){background:#f8faff}
+.rel-header-print{display:none}
+.migration-banner{background:#fff3e0;border:1px solid #ffb300;border-radius:10px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;font-size:13px;flex-wrap:wrap}
+.migration-banner i{font-size:22px;color:#ff6f00;flex-shrink:0}
+.migration-banner .mb-text{flex:1;min-width:180px}
+.migration-banner .mb-title{font-weight:700;color:#e65100;margin-bottom:3px}
+.migration-banner .mb-sub{font-size:12px;color:#78909c}
+@media print{
+  .sidebar,.topbar,.actions-row,.pron-tab,.btn,.notif{display:none !important}
+  .main{margin-left:0 !important}
+  .rel-header-print{display:block;text-align:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1a237e}
+  body{background:#fff}
+}
+@media(min-width:769px){
+  .modal-bg{align-items:center}.modal{border-radius:14px;width:560px;max-width:95vw}.modal.wide{width:660px}
+  .agenda-layout{grid-template-columns:260px 1fr !important}
+}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.hamburger{display:flex}.main{margin-left:0}
+  .content{padding:14px}.summary-grid{grid-template-columns:repeat(2,1fr);gap:10px}.metric-val{font-size:18px}
+  .two-col{grid-template-columns:1fr !important}.three-col{grid-template-columns:1fr !important}
+  .form-grid,.form-grid.cols-3{grid-template-columns:1fr}.form-group.span-2,.form-group.span-3{grid-column:span 1}
+  #patient-list,#prof-list{grid-template-columns:1fr !important}
+  .agenda-layout{grid-template-columns:1fr !important}
+  .perm-grid{grid-template-columns:1fr}.card{padding:14px}
+}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Conectando...</div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo"><i class="ti ti-tooth"></i><h1>OdontoSystem</h1><p>Gestão Odontológica</p></div>
+    <div id="cfg-banner"><h4>⚠️ Firebase não configurado</h4><p>Edite o arquivo e substitua os dados em <code>FIREBASE_CONFIG</code>.</p></div>
+    <div class="login-error" id="login-error"><i class="ti ti-alert-circle"></i><span id="login-error-msg"></span></div>
+    <div class="login-success" id="login-success"><i class="ti ti-circle-check"></i><span id="login-success-msg"></span></div>
+
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="switchLoginTab('entrar',this)">Entrar</button>
+      <button class="login-tab" onclick="switchLoginTab('cadastrar',this)">Criar Conta</button>
+      <button class="login-tab" onclick="switchLoginTab('recuperar',this)">Recuperar</button>
+    </div>
+
+    <!-- Entrar -->
+    <div class="login-pane active" id="pane-entrar">
+      <div class="login-field"><label>E-mail</label><input type="email" id="login-user" placeholder="seu@email.com" autocomplete="username"></div>
+      <div class="login-field"><label>Senha</label><input type="password" id="login-pass" placeholder="Sua senha" autocomplete="current-password"></div>
+      <button class="login-btn" id="login-btn" onclick="doLogin()"><i class="ti ti-login"></i>Entrar</button>
+    </div>
+
+    <!-- Cadastrar -->
+    <div class="login-pane" id="pane-cadastrar">
+      <div class="cfg-info">
+        <h4><i class="ti ti-info-circle"></i>Primeiro acesso?</h4>
+        <p>Crie sua conta de administrador. O sistema configurará automaticamente os perfis e permissões padrão na primeira vez.</p>
+      </div>
+      <div class="login-field"><label>Nome completo</label><input type="text" id="reg-nome" placeholder="Seu nome"></div>
+      <div class="login-field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com"></div>
+      <div class="login-field"><label>Senha <span style="font-size:10px;color:#78909c">(mín. 6 caracteres)</span></label><input type="password" id="reg-pass" placeholder="••••••"></div>
+      <div class="login-field"><label>Confirmar senha</label><input type="password" id="reg-pass2" placeholder="••••••"></div>
+      <button class="login-btn green" id="reg-btn" onclick="doRegister()"><i class="ti ti-user-plus"></i>Criar conta</button>
+    </div>
+
+    <!-- Recuperar -->
+    <div class="login-pane" id="pane-recuperar">
+      <div class="login-field"><label>E-mail cadastrado</label><input type="email" id="reset-email" placeholder="seu@email.com"></div>
+      <button class="login-btn" onclick="doResetPass()"><i class="ti ti-mail"></i>Enviar link de recuperação</button>
+    </div>
+
+    <div class="login-footer">v3.1 Firebase © 2025 OdontoSystem</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="logo"><i class="ti ti-tooth"></i><div><span>OdontoSystem</span><small>Gestão Odontológica</small></div></div>
+  <nav id="main-nav">
+    <div class="nav-section" onclick="toggleNavGroup(this,'g-principal')"><span>Principal</span><i class="ti ti-chevron-down nav-arrow"></i></div>
+    <div class="nav-group-items" id="g-principal">
+      <a data-section="dashboard" class="active" onclick="goTo('dashboard',this)"><i class="ti ti-dashboard"></i><span>Dashboard</span></a>
+      <a data-section="agenda" onclick="goTo('agenda',this)"><i class="ti ti-calendar"></i><span>Agenda</span></a>
+      <a data-section="pacientes" onclick="goTo('pacientes',this)"><i class="ti ti-users"></i><span>Pacientes</span></a>
+      <a data-section="prontuario" onclick="goTo('prontuario',this)"><i class="ti ti-clipboard-text"></i><span>Prontuário</span></a>
+    </div>
+    <div class="nav-section" onclick="toggleNavGroup(this,'g-clinica')"><span>Clínica</span><i class="ti ti-chevron-down nav-arrow"></i></div>
+    <div class="nav-group-items" id="g-clinica">
+      <a data-section="documentos" onclick="goTo('documentos',this)"><i class="ti ti-file-text"></i><span>Documentos</span></a>
+      <a data-section="exames" onclick="goTo('exames',this)"><i class="ti ti-microscope"></i><span>Exames</span></a>
+      <a data-section="tarefas" onclick="goTo('tarefas',this)"><i class="ti ti-checkbox"></i><span>Tarefas</span></a>
+      <a data-section="aniversariantes" onclick="goTo('aniversariantes',this)"><i class="ti ti-cake"></i><span>Aniversariantes</span></a>
+    </div>
+    <div class="nav-section" onclick="toggleNavGroup(this,'g-gestao')"><span>Gestão</span><i class="ti ti-chevron-down nav-arrow"></i></div>
+    <div class="nav-group-items" id="g-gestao">
+      <a data-section="profissionais" onclick="goTo('profissionais',this)"><i class="ti ti-user-heart"></i><span>Profissionais</span></a>
+      <a data-section="financeiro" onclick="goTo('financeiro',this)"><i class="ti ti-currency-dollar"></i><span>Financeiro</span></a>
+      <a data-section="relatorios" onclick="goTo('relatorios',this)"><i class="ti ti-report-analytics"></i><span>Relatórios</span></a>
+      <a data-section="estoque" onclick="goTo('estoque',this)"><i class="ti ti-package"></i><span>Estoque</span></a>
+    </div>
+    <div class="nav-section" onclick="toggleNavGroup(this,'g-admin')"><span>Administração</span><i class="ti ti-chevron-down nav-arrow"></i></div>
+    <div class="nav-group-items" id="g-admin">
+      <a data-section="usuarios" onclick="goTo('usuarios',this)"><i class="ti ti-users-group"></i><span>Usuários</span></a>
+      <a data-section="perfis" onclick="goTo('perfis',this)"><i class="ti ti-shield-check"></i><span>Perfis de Acesso</span></a>
+      <a data-section="logs" onclick="goTo('logs',this)"><i class="ti ti-activity"></i><span>Logs do Sistema</span></a>
+    </div>
+  </nav>
+  <div class="sidebar-user">
+    <div class="patient-avatar" id="sb-avatar" style="background:#1565C0;width:32px;height:32px;font-size:11px;min-width:32px"></div>
+    <div class="sidebar-user-info"><div class="sidebar-user-name" id="sb-user-name">—</div><div class="sidebar-user-role" id="sb-user-role">—</div></div>
+    <button class="btn btn-sm" style="background:rgba(255,255,255,.1);color:#fff;border:none;padding:5px 8px" onclick="doLogout()" title="Sair"><i class="ti ti-logout"></i></button>
+  </div>
+</aside>
+
+<div class="main" id="main">
+<header class="topbar">
+  <div style="display:flex;align-items:center;gap:10px">
+    <button class="hamburger" id="hamburger" onclick="toggleSidebar()"><span></span><span></span><span></span></button>
+    <div class="topbar-title" id="topbar-title">Dashboard</div>
+  </div>
+  <div class="topbar-actions">
+    <div class="fb-badge" id="fb-badge"><i class="ti ti-cloud"></i><span>Online</span></div>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addAppt')" id="btn-novo-agend"><i class="ti ti-plus"></i><span>Novo Agendamento</span></button>
+    <div class="avatar" id="top-avatar" title="Sair" onclick="doLogout()"></div>
+  </div>
+</header>
+<div class="content">
+
+<!-- DASHBOARD -->
+<div id="section-dashboard" class="section active">
+  <div id="migration-area"></div>
+  <div class="summary-grid">
+    <div class="metric"><div class="metric-label">Consultas Hoje</div><div class="metric-val" id="dash-hoje">0</div><div class="metric-sub" id="dash-hoje-sub">—</div></div>
+    <div class="metric green"><div class="metric-label">Receita Mês</div><div class="metric-val" id="dash-receita">R$0</div><div class="metric-sub">atual</div></div>
+    <div class="metric amber"><div class="metric-label">Pacientes</div><div class="metric-val" id="dash-pac">0</div><div class="metric-sub">cadastrados</div></div>
+    <div class="metric red"><div class="metric-label">Est. Crítico</div><div class="metric-val" id="dash-estoque">0</div><div class="metric-sub">itens</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" class="two-col">
+    <div class="card"><div class="card-title"><i class="ti ti-calendar-event"></i>Próximas Consultas</div><div id="dash-appts"></div></div>
+    <div class="card"><div class="card-title"><i class="ti ti-checkbox"></i>Tarefas Pendentes</div><div id="dash-tasks"></div></div>
+  </div>
+</div>
+
+<!-- AGENDA -->
+<div id="section-agenda" class="section">
+  <div style="display:grid;grid-template-columns:260px 1fr;gap:14px;align-items:start" class="agenda-layout">
+    <div class="card" style="margin:0">
+      <div class="card-title"><i class="ti ti-calendar"></i>Calendário</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <button class="btn btn-outline btn-sm" onclick="calNav(-1)"><i class="ti ti-chevron-left"></i></button>
+        <span id="cal-label" style="font-size:13px;font-weight:600"></span>
+        <button class="btn btn-outline btn-sm" onclick="calNav(1)"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+    <div class="card" style="margin:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div class="card-title" style="margin:0"><i class="ti ti-list"></i>Consultas — <span id="agenda-date-label">hoje</span></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" id="btn-view-dia" onclick="setAgendaView('dia')" style="background:#1565C0;color:#fff"><i class="ti ti-layout-list"></i> Dia</button>
+          <button class="btn btn-outline btn-sm" id="btn-view-semana" onclick="setAgendaView('semana')"><i class="ti ti-layout-columns"></i> Semana</button>
+        </div>
+      </div>
+      <div id="checkin-panel" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin-bottom:14px;display:none">
+        <div style="font-size:12px;font-weight:600;color:#15803d;margin-bottom:8px"><i class="ti ti-user-check" style="margin-right:4px"></i>Check-in Rápido</div>
+        <div id="checkin-list"></div>
+      </div>
+      <div class="actions-row">
+        <button class="btn btn-primary btn-sm" onclick="openModal('addAppt')"><i class="ti ti-plus"></i>Agendar</button>
+        <select id="filter-prof" style="font-size:12px;padding:5px 8px" onchange="renderAgendaView()"><option value="">Todos</option></select>
+        <select id="filter-status" style="font-size:12px;padding:5px 8px" onchange="renderAgendaView()">
+          <option value="">Todos status</option><option>Confirmado</option><option>Aguardando</option><option>Presente</option><option>Faltou</option><option>Agendado</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="toggleCheckin()"><i class="ti ti-user-check"></i></button>
+      </div>
+      <div id="agenda-table-wrap"></div>
+      <div id="agenda-week-wrap" style="display:none;overflow-x:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PACIENTES -->
+<div id="section-pacientes" class="section">
+  <div class="actions-row">
+    <button class="btn btn-primary btn-sm" onclick="openModal('addPaciente')"><i class="ti ti-user-plus"></i>Novo</button>
+    <input type="text" id="search-pac" placeholder="Buscar..." style="flex:1;min-width:120px" oninput="renderPacientes()">
+    <select id="filter-cat" onchange="renderPacientes()" style="font-size:12px;padding:5px 8px">
+      <option value="">Todos</option><option>Ortodontia</option><option>Implante</option><option>Plano de Saúde</option><option>Particular</option><option>Infantil</option>
+    </select>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px" id="patient-list"></div>
+</div>
+
+<!-- PRONTUÁRIO -->
+<div id="section-prontuario" class="section">
+  <div id="pron-select-msg" style="text-align:center;padding:48px 20px;color:#78909c">
+    <i class="ti ti-clipboard-text" style="font-size:44px;display:block;margin-bottom:10px;opacity:.3"></i>
+    <div style="font-size:15px;font-weight:500">Selecione um paciente</div>
+    <div style="font-size:13px;margin-top:6px">Vá em <b>Pacientes</b> e clique em um para abrir o prontuário.</div>
+  </div>
+  <div id="pron-content" style="display:none">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="patient-avatar" id="pron-avatar" style="background:#1565C0;width:46px;height:46px;font-size:15px;min-width:46px"></div>
+      <div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:600" id="pron-patient-name"></div><div style="font-size:12px;color:#78909c" id="pron-patient-sub"></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="openReceitaProntuario()"><i class="ti ti-file-text"></i>Receita</button>
+        <button class="btn btn-primary btn-sm" onclick="openEditPaciente()"><i class="ti ti-edit"></i></button>
+      </div>
+    </div>
+    <div class="pron-tab">
+      <button class="pron-tab-btn active" onclick="pronTab(this,'resumo')">Resumo</button>
+      <button class="pron-tab-btn" onclick="pronTab(this,'anamnese')">Análise Clínica</button>
+      <button class="pron-tab-btn" onclick="pronTab(this,'odontograma')">Odontograma</button>
+      <button class="pron-tab-btn" onclick="pronTab(this,'plano')">Plano de Tratamento</button>
+      <button class="pron-tab-btn" onclick="pronTab(this,'historico')">Histórico</button>
+    </div>
+    <div id="pron-resumo" class="pron-pane active">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px" class="three-col">
+        <div class="card" style="margin:0"><div class="card-title" style="margin-bottom:8px"><i class="ti ti-info-circle"></i>Dados</div><div id="pron-dados" style="font-size:12px"></div></div>
+        <div class="card" style="margin:0"><div class="card-title" style="margin-bottom:8px"><i class="ti ti-heart-rate"></i>Saúde</div><div id="pron-saude" style="font-size:12px"></div></div>
+        <div class="card" style="margin:0"><div class="card-title" style="margin-bottom:8px"><i class="ti ti-calendar-check"></i>Consultas</div><div id="pron-consultas"></div></div>
+      </div>
+      <div class="card" style="margin-top:12px"><div class="card-title"><i class="ti ti-notes"></i>Observações</div><div id="pron-obs" style="font-size:13px;color:#37474f;line-height:1.7"></div></div>
+    </div>
+    <div id="pron-anamnese" class="pron-pane">
+      <div class="card"><div class="card-title"><i class="ti ti-clipboard-list"></i>Análise Clínica</div>
+        <div class="form-grid cols-3">
+          <div class="form-group"><label>Queixa</label><input type="text" id="an-queixa"></div>
+          <div class="form-group"><label>Pressão</label><input type="text" id="an-pressao"></div>
+          <div class="form-group"><label>Temperatura</label><input type="text" id="an-temp"></div>
+          <div class="form-group span-3"><label>Histórico médico</label><textarea id="an-historico"></textarea></div>
+          <div class="form-group span-3"><label>Alergias</label><textarea id="an-alergias"></textarea></div>
+          <div class="form-group span-3"><label>Medicamentos</label><textarea id="an-meds"></textarea></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="saveAnamnese()"><i class="ti ti-device-floppy"></i> Salvar</button>
+      </div>
+    </div>
+    <div id="pron-odontograma" class="pron-pane">
+      <div class="card">
+        <div class="card-title"><i class="ti ti-tooth"></i>Odontograma Interativo</div>
+        <div class="odo-palette-wrap" id="odo-palette-wrap"></div>
+        <div class="odo-wrap">
+          <div style="min-width:600px">
+            <div style="display:flex;align-items:center;margin-bottom:2px">
+              <span style="font-size:10px;color:#90a4ae;width:60px;text-align:right;padding-right:8px;font-weight:600">SUPERIOR</span>
+              <div class="odo-arcade" id="odo-superior"></div>
+            </div>
+            <div style="border-top:2px dashed #cfd8dc;margin:4px 60px 4px 68px"></div>
+            <div style="display:flex;align-items:center;margin-top:2px">
+              <span style="font-size:10px;color:#90a4ae;width:60px;text-align:right;padding-right:8px;font-weight:600">INFERIOR</span>
+              <div class="odo-arcade inferior" id="odo-inferior"></div>
+            </div>
+          </div>
+        </div>
+        <div id="odo-detail" style="display:none;margin-top:14px;padding:14px;background:#f5f9ff;border-radius:10px;border:1px solid #e3f2fd">
+          <div style="font-size:13px;font-weight:600;color:#1a237e;margin-bottom:10px" id="odo-detail-title">Dente —</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <div class="form-group" style="flex:1;min-width:160px"><label>Status</label><select id="odo-detail-status" onchange="applyToothStatus()"></select></div>
+            <div class="form-group" style="flex:2;min-width:200px"><label>Observação</label><input type="text" id="odo-detail-obs" placeholder="Ex: Cárie proximal..."></div>
+            <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="saveToothDetail()"><i class="ti ti-device-floppy"></i> Salvar dente</button>
+          </div>
+        </div>
+        <div class="odo-legend-row" id="odo-legend"></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-success" onclick="saveOdontograma()"><i class="ti ti-device-floppy"></i> Salvar Odontograma</button>
+        </div>
+      </div>
+      <div class="card"><div class="card-title"><i class="ti ti-list-details"></i>Resumo Clínico</div><div id="odo-summary"></div></div>
+    </div>
+    <div id="pron-plano" class="pron-pane">
+      <div class="card">
+        <div class="card-title"><i class="ti ti-clipboard-list"></i>Plano de Tratamento</div>
+        <div class="actions-row">
+          <button class="btn btn-primary btn-sm" onclick="openModal('addPlano')"><i class="ti ti-plus"></i>Adicionar</button>
+          <select id="plano-filter-status" style="font-size:12px;padding:5px 8px" onchange="renderPlano()">
+            <option value="">Todos</option><option value="pendente">Pendentes</option><option value="aprovado">Aprovados</option><option value="concluido">Concluídos</option>
+          </select>
+        </div>
+        <div id="plano-list"></div>
+        <div id="plano-totals" style="margin-top:12px;padding:12px 16px;background:#f5f9ff;border-radius:8px;border:1px solid #e3f2fd;font-size:13px;display:flex;gap:20px;flex-wrap:wrap"></div>
+      </div>
+    </div>
+    <div id="pron-historico" class="pron-pane">
+      <div class="card"><div class="card-title"><i class="ti ti-history"></i>Histórico</div>
+        <div class="actions-row"><button class="btn btn-primary btn-sm" onclick="openModal('addAtendimento')"><i class="ti ti-plus"></i>Registrar</button></div>
+        <div id="pron-hist-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DOCUMENTOS -->
+<div id="section-documentos" class="section">
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px" class="three-col">
+    <div class="doc-card" onclick="openModal('receita')"><i class="ti ti-pill"></i><div class="doc-card-info"><h4>Receita Médica</h4><p>Prescrição</p></div></div>
+    <div class="doc-card" onclick="openModal('atestado')"><i class="ti ti-certificate"></i><div class="doc-card-info"><h4>Atestado</h4><p>Afastamento</p></div></div>
+    <div class="doc-card" onclick="showNotif('Em breve','')"><i class="ti ti-file-description"></i><div class="doc-card-info"><h4>Declaração</h4><p>Comparecimento</p></div></div>
+  </div>
+  <div class="card"><div class="card-title"><i class="ti ti-history"></i>Documentos Emitidos</div><div class="table-wrap" id="docs-list"></div></div>
+</div>
+
+<!-- EXAMES -->
+<div id="section-exames" class="section">
+  <div class="actions-row">
+    <button class="btn btn-primary btn-sm" onclick="openModal('addExame')"><i class="ti ti-upload"></i>Cadastrar</button>
+    <input type="text" id="search-exame" placeholder="Buscar..." style="flex:1;min-width:100px" oninput="renderExames()">
+    <select id="filter-exame-tipo" onchange="renderExames()" style="font-size:12px;padding:5px 8px">
+      <option value="">Todos</option><option>Radiografia Panorâmica</option><option>Radiografia Periapical</option><option>Tomografia</option><option>Foto Intraoral</option><option>Modelo 3D</option><option>Outro</option>
+    </select>
+  </div>
+  <div class="card"><div class="card-title"><i class="ti ti-microscope"></i>Exames Cadastrados</div><div class="table-wrap" id="exames-list"></div></div>
+</div>
+
+<!-- TAREFAS -->
+<div id="section-tarefas" class="section">
+  <div class="actions-row">
+    <button class="btn btn-primary btn-sm" onclick="openModal('addTask')"><i class="ti ti-plus"></i>Nova Tarefa</button>
+    <select id="filter-task-pri" onchange="renderTarefas()" style="font-size:12px;padding:5px 8px">
+      <option value="">Todas</option><option>Alta</option><option>Média</option><option>Baixa</option>
+    </select>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" class="two-col">
+    <div><div style="font-size:13px;font-weight:600;color:#1a237e;margin-bottom:8px">Pendentes</div><div id="tasks-pending"></div></div>
+    <div><div style="font-size:13px;font-weight:600;color:#78909c;margin-bottom:8px">Concluídas</div><div id="tasks-done"></div></div>
+  </div>
+</div>
+
+<!-- ANIVERSARIANTES -->
+<div id="section-aniversariantes" class="section">
+  <div class="summary-grid">
+    <div class="metric green"><div class="metric-label">Hoje</div><div class="metric-val" id="aniv-hoje">0</div><div class="metric-sub">aniversariantes</div></div>
+    <div class="metric"><div class="metric-label">Esta Semana</div><div class="metric-val" id="aniv-semana" style="color:#1565C0">0</div><div class="metric-sub">próximos 7 dias</div></div>
+    <div class="metric amber"><div class="metric-label">Este Mês</div><div class="metric-val" id="aniv-mes">0</div><div class="metric-sub" id="aniv-mes-label">—</div></div>
+    <div class="metric"><div class="metric-label">Com data</div><div class="metric-val" id="aniv-total">0</div><div class="metric-sub">pacientes</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" class="two-col">
+    <div class="card"><div class="card-title"><i class="ti ti-cake" style="color:#e65100"></i>Aniversariantes de Hoje</div><div id="aniv-list-hoje"></div></div>
+    <div class="card">
+      <div class="card-title"><i class="ti ti-calendar-event"></i>Por mês</div>
+      <div style="margin-bottom:10px">
+        <select id="aniv-filter-mes" style="font-size:12px;padding:5px 8px;width:auto" onchange="renderAniversariantes()">
+          <option value="">Mês atual</option>
+          <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+          <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+          <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+          <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+        </select>
+      </div>
+      <div id="aniv-list-mes"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PROFISSIONAIS -->
+<div id="section-profissionais" class="section">
+  <div class="actions-row">
+    <button class="btn btn-primary btn-sm" onclick="openModal('addMedico')"><i class="ti ti-user-plus"></i>Novo</button>
+    <input type="text" id="search-medico" placeholder="Buscar..." style="flex:1;min-width:100px" oninput="renderProfissionais()">
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px" id="prof-list"></div>
+</div>
+
+<!-- FINANCEIRO -->
+<div id="section-financeiro" class="section">
+  <div class="pron-tab" style="margin-bottom:20px">
+    <button class="pron-tab-btn active" onclick="finTab(this,'movimentacoes')">Movimentações</button>
+    <button class="pron-tab-btn" onclick="finTab(this,'contas')">Contas a Pagar/Receber</button>
+    <button class="pron-tab-btn" onclick="finTab(this,'comissoes')">Comissões</button>
+  </div>
+  <div id="fin-movimentacoes" class="fin-pane active">
+    <div class="summary-grid">
+      <div class="metric green"><div class="metric-label">Receita</div><div class="metric-val" id="fin-receita">R$0</div></div>
+      <div class="metric red"><div class="metric-label">Despesas</div><div class="metric-val" id="fin-despesas">R$0</div></div>
+      <div class="metric"><div class="metric-label">Lucro</div><div class="metric-val" id="fin-lucro">R$0</div></div>
+      <div class="metric amber"><div class="metric-label">A Receber</div><div class="metric-val" id="fin-receber">R$0</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" class="two-col">
+      <div class="card">
+        <div class="card-title"><i class="ti ti-list"></i>Movimentações</div>
+        <div class="actions-row"><button class="btn btn-primary btn-sm" onclick="openModal('addFinanceiro')"><i class="ti ti-plus"></i>Nova</button></div>
+        <div id="fin-list"></div>
+      </div>
+      <div class="card"><div class="card-title"><i class="ti ti-chart-bar"></i>Por Categoria</div><div id="fin-categorias"></div></div>
+    </div>
+  </div>
+  <div id="fin-contas" class="fin-pane" style="display:none">
+    <div class="summary-grid">
+      <div class="metric red"><div class="metric-label">A Pagar (vencidas)</div><div class="metric-val" id="cp-vencidas">R$0</div></div>
+      <div class="metric amber"><div class="metric-label">A Pagar (a vencer)</div><div class="metric-val" id="cp-avencer">R$0</div></div>
+      <div class="metric green"><div class="metric-label">A Receber (em dia)</div><div class="metric-val" id="cr-emdia">R$0</div></div>
+      <div class="metric red"><div class="metric-label">A Receber (vencidas)</div><div class="metric-val" id="cr-vencidas">R$0</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="ti ti-calendar-due"></i>Contas a Pagar e Receber</div>
+      <div class="actions-row">
+        <button class="btn btn-primary btn-sm" onclick="openModal('addConta')"><i class="ti ti-plus"></i>Nova Conta</button>
+        <select id="cp-filter-tipo" style="font-size:12px;padding:5px 8px" onchange="renderContas()"><option value="">Todas</option><option value="pagar">A Pagar</option><option value="receber">A Receber</option></select>
+        <select id="cp-filter-status" style="font-size:12px;padding:5px 8px" onchange="renderContas()"><option value="">Todos status</option><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="vencido">Vencido</option></select>
+      </div>
+      <div class="table-wrap" id="contas-list"></div>
+    </div>
+  </div>
+  <div id="fin-comissoes" class="fin-pane" style="display:none">
+    <div class="card">
+      <div class="card-title"><i class="ti ti-award"></i>Comissão por Profissional</div>
+      <div class="actions-row">
+        <label style="font-size:13px;font-weight:500;text-transform:none;letter-spacing:0">Mês:</label>
+        <input type="month" id="com-mes" style="padding:5px 10px;font-size:12px;width:auto">
+        <label style="font-size:13px;font-weight:500;text-transform:none;letter-spacing:0">% Comissão:</label>
+        <input type="number" id="com-pct" value="30" min="1" max="100" style="padding:5px 10px;font-size:12px;width:70px">
+        <button class="btn btn-primary btn-sm" onclick="calcComissoes()"><i class="ti ti-calculator"></i>Calcular</button>
+      </div>
+      <div id="comissoes-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RELATÓRIOS -->
+<div id="section-relatorios" class="section">
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px" class="three-col">
+    <div class="doc-card" onclick="gerarRelatorio('receita')"><i class="ti ti-chart-line" style="color:#2e7d32"></i><div class="doc-card-info"><h4>Receita Mensal</h4><p>Faturamento por período</p></div></div>
+    <div class="doc-card" onclick="gerarRelatorio('atendimentos')"><i class="ti ti-users" style="color:#1565C0"></i><div class="doc-card-info"><h4>Pacientes Atendidos</h4><p>Consultas por período</p></div></div>
+    <div class="doc-card" onclick="gerarRelatorio('produtividade')"><i class="ti ti-award" style="color:#e65100"></i><div class="doc-card-info"><h4>Produtividade</h4><p>Por profissional</p></div></div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div class="form-group" style="flex:1;min-width:140px"><label>Data Início</label><input type="date" id="rel-inicio"></div>
+      <div class="form-group" style="flex:1;min-width:140px"><label>Data Fim</label><input type="date" id="rel-fim"></div>
+      <div class="form-group" style="flex:1;min-width:140px"><label>Profissional</label><select id="rel-prof"><option value="">Todos</option></select></div>
+      <button class="btn btn-primary" onclick="gerarRelatorio('atual')"><i class="ti ti-refresh"></i>Gerar</button>
+      <button class="btn btn-success" onclick="window.print()"><i class="ti ti-printer"></i>Imprimir</button>
+    </div>
+  </div>
+  <div id="rel-content"></div>
+</div>
+
+<!-- ESTOQUE -->
+<div id="section-estoque" class="section">
+  <div class="actions-row">
+    <button class="btn btn-primary btn-sm" onclick="openModal('addEstoque')"><i class="ti ti-plus"></i>Cadastrar</button>
+    <input type="text" id="search-estoque" placeholder="Buscar..." style="flex:1;min-width:80px" oninput="renderEstoque()">
+    <select id="filter-estoque-cat" onchange="renderEstoque()" style="font-size:12px;padding:5px 8px"><option value="">Todos</option><option>EPI</option><option>Medicamento</option><option>Material Clínico</option><option>Equipamento</option></select>
+    <select id="filter-estoque-status" onchange="renderEstoque()" style="font-size:12px;padding:5px 8px"><option value="">Status</option><option>Normal</option><option>Atenção</option><option>Crítico</option></select>
+  </div>
+  <div class="card"><div class="card-title"><i class="ti ti-package"></i>Controle de Estoque</div><div class="table-wrap" id="estoque-table"></div></div>
+</div>
+
+<!-- USUÁRIOS -->
+<div id="section-usuarios" class="section">
+  <div class="actions-row"><button class="btn btn-primary btn-sm" onclick="openModal('addUsuario')"><i class="ti ti-user-plus"></i>Novo Usuário</button></div>
+  <div class="card"><div class="card-title"><i class="ti ti-users-group"></i>Usuários Cadastrados</div><div id="usuarios-list"></div></div>
+</div>
+
+<!-- PERFIS -->
+<div id="section-perfis" class="section">
+  <div class="actions-row"><button class="btn btn-primary btn-sm" onclick="openModal('addPerfil')"><i class="ti ti-plus"></i>Novo Perfil</button></div>
+  <div id="perfis-list" style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px" class="two-col"></div>
+</div>
+
+<!-- LOGS -->
+<div id="section-logs" class="section">
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title"><i class="ti ti-filter"></i>Filtros</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select id="log-filter-user" style="font-size:12px;padding:6px 10px" onchange="renderLogs()"><option value="">Todos usuários</option></select>
+      <select id="log-filter-type" style="font-size:12px;padding:6px 10px" onchange="renderLogs()">
+        <option value="">Todos os tipos</option><option value="login">Login</option><option value="logout">Logout</option>
+        <option value="create">Criação</option><option value="edit">Edição</option><option value="delete">Exclusão</option><option value="view">Visualização</option>
+      </select>
+      <input type="date" id="log-filter-date" style="font-size:12px;padding:6px 10px" onchange="renderLogs()">
+      <button class="btn btn-outline btn-sm" onclick="clearLogFilters()"><i class="ti ti-x"></i>Limpar</button>
+      <button class="btn btn-danger btn-sm" onclick="clearAllLogs()" style="margin-left:auto"><i class="ti ti-trash"></i>Limpar Logs</button>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px" id="log-stats"></div>
+  </div>
+  <div class="card"><div class="card-title"><i class="ti ti-activity"></i>Histórico <span id="log-count" style="font-size:12px;color:#78909c;font-weight:400"></span></div><div id="logs-list"></div></div>
+</div>
+
+</div></div></div>
+
+<!-- ═══════════ MODAIS ═══════════ -->
+<div class="modal-bg" id="modal-addAppt"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-calendar-plus" style="margin-right:6px"></i><span id="appt-modal-title">Novo Agendamento</span></h3><button class="modal-close" onclick="closeModal('addAppt')"><i class="ti ti-x"></i></button></div>
+  <input type="hidden" id="appt-edit-id">
+  <div class="form-grid">
+    <div class="form-group"><label>Paciente</label><select id="appt-paciente"></select></div>
+    <div class="form-group"><label>Profissional</label><select id="appt-prof"></select></div>
+    <div class="form-group"><label>Data</label><input type="date" id="appt-data"></div>
+    <div class="form-group"><label>Horário</label><input type="time" id="appt-hora"></div>
+    <div class="form-group"><label>Procedimento</label><select id="appt-proc"><option>Avaliação</option><option>Limpeza</option><option>Extração</option><option>Tratamento de Canal</option><option>Clareamento</option><option>Aparelho Ortodôntico</option><option>Implante</option><option>Outro</option></select></div>
+    <div class="form-group"><label>Sala</label><select id="appt-sala"><option>Sala 1</option><option>Sala 2</option></select></div>
+    <div class="form-group"><label>Status</label><select id="appt-status"><option>Agendado</option><option>Confirmado</option><option>Aguardando</option><option>Presente</option><option>Faltou</option></select></div>
+    <div class="form-group"><label>Valor (R$)</label><input type="number" id="appt-valor" placeholder="0.00" step="0.01"></div>
+    <div class="form-group span-2"><label>Observações</label><textarea id="appt-obs" rows="2"></textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addAppt')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveAppt()"><i class="ti ti-check"></i>Confirmar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addPaciente"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-user-plus" style="margin-right:6px"></i><span id="pac-modal-title">Cadastrar Paciente</span></h3><button class="modal-close" onclick="closeModal('addPaciente')"><i class="ti ti-x"></i></button></div>
+  <input type="hidden" id="pac-edit-id">
+  <div class="form-grid">
+    <div class="form-group span-2"><label>Nome completo</label><input type="text" id="pac-nome"></div>
+    <div class="form-group"><label>CPF</label><input type="text" id="pac-cpf"></div>
+    <div class="form-group"><label>Nascimento</label><input type="date" id="pac-nasc"></div>
+    <div class="form-group"><label>Sexo</label><select id="pac-sexo"><option>Feminino</option><option>Masculino</option><option>Outro</option></select></div>
+    <div class="form-group"><label>Telefone</label><input type="tel" id="pac-tel"></div>
+    <div class="form-group"><label>E-mail</label><input type="email" id="pac-email"></div>
+    <div class="form-group"><label>Convênio</label><select id="pac-convenio"><option>Particular</option><option>Plano de Saúde</option></select></div>
+    <div class="form-group span-2"><label>Categorias</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
+        <label style="text-transform:none;font-size:12px;font-weight:400;display:flex;align-items:center;gap:4px"><input type="checkbox" id="cat-ortod" value="Ortodontia">Ortodontia</label>
+        <label style="text-transform:none;font-size:12px;font-weight:400;display:flex;align-items:center;gap:4px"><input type="checkbox" id="cat-implan" value="Implante">Implante</label>
+        <label style="text-transform:none;font-size:12px;font-weight:400;display:flex;align-items:center;gap:4px"><input type="checkbox" id="cat-urg" value="Urgência">Urgência</label>
+        <label style="text-transform:none;font-size:12px;font-weight:400;display:flex;align-items:center;gap:4px"><input type="checkbox" id="cat-inf" value="Infantil">Infantil</label>
+        <label style="text-transform:none;font-size:12px;font-weight:400;display:flex;align-items:center;gap:4px"><input type="checkbox" id="cat-idoso" value="Idoso">Idoso</label>
+      </div>
+    </div>
+    <div class="form-group"><label>Alergias</label><input type="text" id="pac-alergias"></div>
+    <div class="form-group span-2"><label>Doenças / Medicamentos</label><textarea id="pac-obs" rows="2"></textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addPaciente')">Cancelar</button>
+    <button class="btn btn-primary" onclick="savePaciente()"><i class="ti ti-check"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addAtendimento"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-stethoscope" style="margin-right:6px"></i>Registrar Atendimento</h3><button class="modal-close" onclick="closeModal('addAtendimento')"><i class="ti ti-x"></i></button></div>
+  <div class="form-grid col-1">
+    <div class="form-group"><label>Data</label><input type="date" id="at-data"></div>
+    <div class="form-group"><label>Procedimento</label><input type="text" id="at-proc"></div>
+    <div class="form-group"><label>Dentista</label><select id="at-dentista"></select></div>
+    <div class="form-group"><label>Observações</label><textarea id="at-obs" rows="2"></textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addAtendimento')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveAtendimento()"><i class="ti ti-check"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addExame"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-microscope" style="margin-right:6px"></i>Cadastrar Exame</h3><button class="modal-close" onclick="closeModal('addExame')"><i class="ti ti-x"></i></button></div>
+  <div class="form-grid">
+    <div class="form-group span-2"><label>Paciente</label><select id="exam-pac"></select></div>
+    <div class="form-group"><label>Tipo</label><select id="exam-tipo"><option>Radiografia Panorâmica</option><option>Radiografia Periapical</option><option>Tomografia</option><option>Foto Intraoral</option><option>Modelo 3D</option><option>Outro</option></select></div>
+    <div class="form-group"><label>Data</label><input type="date" id="exam-data"></div>
+    <div class="form-group"><label>Arquivo / Referência</label><input type="text" id="exam-arquivo"></div>
+    <div class="form-group"><label>Tamanho</label><input type="text" id="exam-tamanho"></div>
+    <div class="form-group span-2"><label>Observações</label><textarea id="exam-obs" rows="2"></textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addExame')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveExame()"><i class="ti ti-check"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addTask"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-checkbox" style="margin-right:6px"></i>Nova Tarefa</h3><button class="modal-close" onclick="closeModal('addTask')"><i class="ti ti-x"></i></button></div>
+  <div class="form-grid col-1">
+    <div class="form-group"><label>Descrição</label><input type="text" id="task-desc"></div>
+    <div class="form-group"><label>Prioridade</label><select id="task-pri"><option>Alta</option><option>Média</option><option>Baixa</option></select></div>
+    <div class="form-group"><label>Data Limite</label><input type="date" id="task-date"></div>
+    <div class="form-group"><label>Paciente (opcional)</label><select id="task-pac"></select></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addTask')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveTask()"><i class="ti ti-check"></i>Criar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addMedico"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-user-heart" style="margin-right:6px"></i><span id="med-modal-title">Novo Profissional</span></h3><button class="modal-close" onclick="closeModal('addMedico')"><i class="ti ti-x"></i></button></div>
+  <input type="hidden" id="med-edit-id">
+  <div class="form-grid">
+    <div class="form-group span-2"><label>Nome completo</label><input type="text" id="med-nome"></div>
+    <div class="form-group"><label>CRO</label><input type="text" id="med-cro"></div>
+    <div class="form-group"><label>Especialidade</label><select id="med-esp"><option>Clínico Geral</option><option>Ortodontia</option><option>Implantodontia</option><option>Endodontia</option><option>Periodontia</option><option>Cirurgia</option><option>Odontopediatria</option><option>Prótese</option><option>Outra</option></select></div>
+    <div class="form-group"><label>Cor</label><input type="color" id="med-cor" value="#1565C0"></div>
+    <div class="form-group"><label>Telefone</label><input type="tel" id="med-tel"></div>
+    <div class="form-group"><label>E-mail</label><input type="email" id="med-email"></div>
+    <div class="form-group"><label>Sala</label><select id="med-sala"><option>Sala 1</option><option>Sala 2</option><option>Sala 3</option></select></div>
+    <div class="form-group span-2" style="border-top:1px solid #e0e0e0;padding-top:10px;margin-top:4px"><label style="font-size:12px;color:#1565C0;text-transform:none;font-weight:600">Dados do Receituário</label></div>
+    <div class="form-group span-2"><label>Nome na receita</label><input type="text" id="med-rec-nome"></div>
+    <div class="form-group span-2"><label>Endereço</label><input type="text" id="med-rec-end"></div>
+    <div class="form-group"><label>Tel. consultório</label><input type="text" id="med-rec-tel"></div>
+    <div class="form-group span-2"><label>Rodapé</label><textarea id="med-rec-obs" rows="2"></textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addMedico')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveMedico()"><i class="ti ti-check"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addFinanceiro"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-currency-dollar" style="margin-right:6px"></i>Nova Movimentação</h3><button class="modal-close" onclick="closeModal('addFinanceiro')"><i class="ti ti-x"></i></button></div>
+  <div class="form-grid">
+    <div class="form-group"><label>Tipo</label><select id="fin-tipo"><option value="entrada">Entrada</option><option value="saida">Saída</option></select></div>
+    <div class="form-group"><label>Valor (R$)</label><input type="number" id="fin-valor" step="0.01"></div>
+    <div class="form-group span-2"><label>Descrição</label><input type="text" id="fin-desc"></div>
+    <div class="form-group"><label>Categoria</label><select id="fin-cat"><option>Particular</option><option>Plano de Saúde</option><option>Ortodontia</option><option>Material</option><option>Aluguel</option><option>Salário</option><option>Outros</option></select></div>
+    <div class="form-group"><label>Data</label><input type="date" id="fin-data"></div>
+    <div class="form-group"><label>Status</label><select id="fin-status"><option value="pago">Pago/Recebido</option><option value="pendente">A Receber/Pagar</option></select></div>
+    <div class="form-group"><label>Paciente (opcional)</label><select id="fin-pac"></select></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addFinanceiro')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveFinanceiro()"><i class="ti ti-check"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addConta"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-calendar-due" style="margin-right:6px"></i><span id="conta-modal-title">Nova Conta</span></h3><button class="modal-close" onclick="closeModal('addConta')"><i class="ti ti-x"></i></button></div>
+  <input type="hidden" id="conta-edit-id">
+  <div class="form-grid">
+    <div class="form-group"><label>Tipo</label><select id="conta-tipo"><option value="receber">A Receber</option><option value="pagar">A Pagar</option></select></div>
+    <div class="form-group"><label>Valor (R$)</label><input type="number" id="conta-valor" step="0.01" placeholder="0.00"></div>
+    <div class="form-group span-2"><label>Descrição</label><input type="text" id="conta-desc"></div>
+    <div class="form-group"><label>Vencimento</label><input type="date" id="conta-vencimento"></div>
+    <div class="form-group"><label>Categoria</label><select id="conta-cat"><option>Consulta</option><option>Plano de Saúde</option><option>Ortodontia</option><option>Material</option><option>Aluguel</option><option>Salário</option><option>Fornecedor</option><option>Outros</option></select></div>
+    <div class="form-group"><label>Paciente (opcional)</label><select id="conta-pac"></select></div>
+    <div class="form-group"><label>Status</label><select id="conta-status"><option value="pendente">Pendente</option><option value="pago">Pago / Recebido</option></select></div>
+    <div class="form-group span-2"><label>Observações</label><textarea id="conta-obs" rows="2"></textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addConta')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveConta()"><i class="ti ti-check"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addEstoque"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-package" style="margin-right:6px"></i><span id="est-modal-title">Cadastrar Item</span></h3><button class="modal-close" onclick="closeModal('addEstoque')"><i class="ti ti-x"></i></button></div>
+  <input type="hidden" id="est-edit-id">
+  <div class="form-grid">
+    <div class="form-group span-2"><label>Nome do Produto</label><input type="text" id="est-nome"></div>
+    <div class="form-group"><label>Categoria</label><select id="est-cat"><option>EPI</option><option>Medicamento</option><option>Material Clínico</option><option>Equipamento</option></select></div>
+    <div class="form-group"><label>Unidade</label><select id="est-un"><option>Caixa</option><option>Unidade</option><option>Ampola</option><option>Frasco</option><option>Seringa</option><option>Envelope</option></select></div>
+    <div class="form-group"><label>Qtd. Atual</label><input type="number" id="est-qtd" min="0"></div>
+    <div class="form-group"><label>Mínimo</label><input type="number" id="est-min" min="0"></div>
+    <div class="form-group"><label>Validade</label><input type="date" id="est-valid"></div>
+    <div class="form-group"><label>Fornecedor</label><input type="text" id="est-forn"></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addEstoque')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveEstoque()"><i class="ti ti-check"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-receita"><div class="modal wide">
+  <div class="modal-head"><h3><i class="ti ti-pill" style="margin-right:6px"></i>Emitir Receita</h3><button class="modal-close" onclick="closeModal('receita')"><i class="ti ti-x"></i></button></div>
+  <div class="form-grid" style="margin-bottom:14px">
+    <div class="form-group"><label>Paciente</label><select id="rec-pac" onchange="updateReceitaPreview()"></select></div>
+    <div class="form-group"><label>Profissional</label><select id="rec-medico" onchange="updateReceitaPreview()"></select></div>
+    <div class="form-group"><label>Data</label><input type="date" id="rec-data" onchange="updateReceitaPreview()"></div>
+    <div class="form-group" style="align-self:flex-end"><button class="btn btn-outline btn-sm" style="width:100%" onclick="updateReceitaPreview()"><i class="ti ti-refresh"></i>Preview</button></div>
+    <div class="form-group span-2"><label>Medicamento e posologia</label><textarea id="rec-med" rows="3" oninput="updateReceitaPreview()"></textarea></div>
+    <div class="form-group span-2"><label>Recomendações</label><textarea id="rec-rec" rows="2" oninput="updateReceitaPreview()"></textarea></div>
+  </div>
+  <div class="receita-paper">
+    <div class="receita-header" id="rec-header"><h2>Consultório</h2><p>—</p></div>
+    <div id="rec-preview" style="font-size:13px;line-height:1.9;min-height:60px"></div>
+    <div class="receita-foot" id="rec-footer">—</div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('receita')">Fechar</button>
+    <button class="btn btn-success" onclick="saveReceita()"><i class="ti ti-printer"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-atestado"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-certificate" style="margin-right:6px"></i>Atestado</h3><button class="modal-close" onclick="closeModal('atestado')"><i class="ti ti-x"></i></button></div>
+  <div class="form-grid">
+    <div class="form-group"><label>Paciente</label><select id="ates-pac"></select></div>
+    <div class="form-group"><label>Profissional</label><select id="ates-medico"></select></div>
+    <div class="form-group"><label>Data</label><input type="date" id="ates-data"></div>
+    <div class="form-group"><label>Horas afastamento</label><input type="number" id="ates-horas" value="4"></div>
+    <div class="form-group"><label>CID (opcional)</label><input type="text" id="ates-cid"></div>
+    <div class="form-group span-2"><label>Observações</label><textarea id="ates-obs" rows="2"></textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+    <button class="btn btn-outline" onclick="closeModal('atestado')">Cancelar</button>
+    <button class="btn btn-success" onclick="saveAtestado()"><i class="ti ti-printer"></i>Emitir</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addPlano"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-clipboard-list" style="margin-right:6px"></i><span id="plano-modal-title">Adicionar Procedimento</span></h3><button class="modal-close" onclick="closeModal('addPlano')"><i class="ti ti-x"></i></button></div>
+  <input type="hidden" id="plano-edit-id">
+  <div class="form-grid">
+    <div class="form-group span-2"><label>Procedimento</label>
+      <select id="plano-proc" onchange="autoFillPlanoValor()">
+        <option value="">— Selecionar —</option>
+        <option value="Avaliacao|150">Avaliação</option><option value="Limpeza e Profilaxia|200">Limpeza e Profilaxia</option>
+        <option value="Restauracao Resina|350">Restauração Resina</option><option value="Tratamento de Canal|1200">Tratamento de Canal</option>
+        <option value="Extracao Simples|350">Extração Simples</option><option value="Extracao Dente do Siso|800">Extração Dente do Siso</option>
+        <option value="Clareamento|800">Clareamento</option><option value="Aparelho Ortodontico|5000">Aparelho Ortodôntico</option>
+        <option value="Implante Dentario|3500">Implante Dentário</option><option value="Protese Total|3000">Prótese Total</option>
+        <option value="Coroa Porcelana|2500">Coroa Porcelana</option><option value="Outro|0">Outro</option>
+      </select>
+    </div>
+    <div class="form-group span-2"><label>Descrição / Detalhe</label><input type="text" id="plano-desc" placeholder="Ex: Restauração elemento 36"></div>
+    <div class="form-group"><label>Dente(s)</label><input type="text" id="plano-dente" placeholder="Ex: 36, 37"></div>
+    <div class="form-group"><label>Valor (R$)</label><input type="number" id="plano-valor" step="0.01"></div>
+    <div class="form-group"><label>Status</label><select id="plano-status"><option value="pendente">Pendente</option><option value="aprovado">Aprovado</option><option value="concluido">Concluído</option></select></div>
+    <div class="form-group"><label>Profissional</label><select id="plano-prof"></select></div>
+    <div class="form-group"><label>Previsão</label><input type="date" id="plano-previsao"></div>
+    <div class="form-group span-2"><label>Observações</label><textarea id="plano-obs" rows="2"></textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addPlano')">Cancelar</button>
+    <button class="btn btn-primary" onclick="savePlano()"><i class="ti ti-check"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addUsuario"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-user-plus" style="margin-right:6px"></i><span id="usr-modal-title">Novo Usuário</span></h3><button class="modal-close" onclick="closeModal('addUsuario')"><i class="ti ti-x"></i></button></div>
+  <input type="hidden" id="usr-edit-id">
+  <div id="usr-edit-note" style="display:none;background:#e3f2fd;border-radius:8px;padding:10px 12px;font-size:12px;color:#1565C0;margin-bottom:12px">
+    <i class="ti ti-info-circle" style="margin-right:4px"></i>Edição de usuário existente. A senha não é alterada aqui.
+  </div>
+  <div class="form-grid">
+    <div class="form-group span-2"><label>Nome completo</label><input type="text" id="usr-nome"></div>
+    <div class="form-group span-2"><label>E-mail</label><input type="email" id="usr-email"></div>
+    <div class="form-group" id="usr-senha-wrap"><label>Senha inicial <span style="font-size:10px;color:#78909c">(mín. 6 caracteres)</span></label><input type="password" id="usr-senha" placeholder="••••••"></div>
+    <div class="form-group"><label>Perfil de acesso</label><select id="usr-perfil"></select></div>
+    <div class="form-group"><label>Status</label><select id="usr-status"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></div>
+  </div>
+  <div id="usr-reset-area" style="display:none;margin-top:10px">
+    <button class="btn btn-warning btn-sm" onclick="sendResetEmail()" style="width:100%"><i class="ti ti-mail"></i>Enviar reset de senha por e-mail</button>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-outline" onclick="closeModal('addUsuario')">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveUsuario()"><i class="ti ti-check"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-addPerfil"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-shield-check" style="margin-right:6px"></i><span id="prf-modal-title">Novo Perfil</span></h3><button class="modal-close" onclick="closeModal('addPerfil')"><i class="ti ti-x"></i></button></div>
+  <input type="hidden" id="prf-edit-id">
+  <div class="form-grid col-1" style="margin-bottom:14px">
+    <div class="form-group"><label>Nome do Perfil</label><input type="text" id="prf-nome"></div>
+    <div class="form-group"><label>Descrição</label><input type="text" id="prf-desc"></div>
+  </div>
+  <label style="font-size:12px;font-weight:600;color:#546e7a;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:8px">Permissões</label>
+  <div class="perm-grid" id="perm-checkboxes"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+    <button class="btn btn-outline" onclick="closeModal('addPerfil')">Cancelar</button>
+    <button class="btn btn-primary" onclick="savePerfil()"><i class="ti ti-check"></i>Salvar</button>
+  </div>
+</div></div>
+
+<div class="notif" id="notif"><i class="ti ti-check-circle"></i><span id="notif-msg"></span></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// FIREBASE CONFIG — substitua com as suas credenciais
+// ═══════════════════════════════════════════════════
+var FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyBn-qlzTKU0SAazPAe_ytFDXXJcf9nEozY",
+  authDomain:        "odontosystem-72f63.firebaseapp.com",
+  projectId:         "odontosystem-72f63",
+  storageBucket:     "odontosystem-72f63.firebasestorage.app",
+  messagingSenderId: "534133981248",
+  appId:             "1:534133981248:web:f9ea910816a13212f05fa5"
+};
+// ═══════════════════════════════════════════════════
+
+var _auth, _db;
+var currentUser = null;
+var _cache = {};
+
+var ALL_SECTIONS = [
+  {id:'dashboard',label:'Dashboard',icon:'ti-dashboard'},
+  {id:'agenda',label:'Agenda',icon:'ti-calendar'},
+  {id:'pacientes',label:'Pacientes',icon:'ti-users'},
+  {id:'prontuario',label:'Prontuário',icon:'ti-clipboard-text'},
+  {id:'documentos',label:'Documentos',icon:'ti-file-text'},
+  {id:'exames',label:'Exames',icon:'ti-microscope'},
+  {id:'tarefas',label:'Tarefas',icon:'ti-checkbox'},
+  {id:'aniversariantes',label:'Aniversariantes',icon:'ti-cake'},
+  {id:'profissionais',label:'Profissionais',icon:'ti-user-heart'},
+  {id:'financeiro',label:'Financeiro',icon:'ti-currency-dollar'},
+  {id:'relatorios',label:'Relatórios',icon:'ti-report-analytics'},
+  {id:'estoque',label:'Estoque',icon:'ti-package'},
+  {id:'usuarios',label:'Usuários',icon:'ti-users-group'},
+  {id:'perfis',label:'Perfis de Acesso',icon:'ti-shield-check'},
+  {id:'logs',label:'Logs do Sistema',icon:'ti-activity'}
+];
+
+// ── HELPERS ──────────────────────────────────────────
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function today(){return new Date().toISOString().split('T')[0]}
+function nowStr(){return new Date().toLocaleString('pt-BR')}
+function fmtDate(d){if(!d)return'—';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d}
+function fmtMoney(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+function calcAge(n){if(!n)return'';var d=new Date(n),nw=new Date(),a=nw.getFullYear()-d.getFullYear();if(nw<new Date(nw.getFullYear(),d.getMonth(),d.getDate()))a--;return a+' anos'}
+function initials(n){if(!n)return'?';return n.trim().split(' ').map(function(w){return w[0]}).join('').slice(0,2).toUpperCase()}
+var AVC=['#1565C0','#00897B','#6a1b9a','#c62828','#f57c00','#2e7d32','#0277bd','#ad1457'];
+function avatarColor(n){var h=0;for(var i=0;i<(n||'').length;i++)h+=n.charCodeAt(i);return AVC[h%AVC.length]}
+var SB={Confirmado:'badge-blue',Presente:'badge-green',Chegou:'badge-green',Aguardando:'badge-amber',Faltou:'badge-red',Agendado:'badge-gray'};
+var SD={Confirmado:'dot-blue',Presente:'dot-green',Chegou:'dot-green',Aguardando:'dot-amber',Faltou:'dot-red',Agendado:'dot-blue'};
+
+function showLoading(msg){document.getElementById('loading-overlay').classList.add('show');document.getElementById('loading-text').textContent=msg||'Carregando...'}
+function hideLoading(){document.getElementById('loading-overlay').classList.remove('show')}
+
+// ── LOGIN TABS ────────────────────────────────────────
+function switchLoginTab(tab, btn) {
+  document.querySelectorAll('.login-tab').forEach(function(b){b.classList.remove('active')});
+  document.querySelectorAll('.login-pane').forEach(function(p){p.classList.remove('active')});
+  btn.classList.add('active');
+  document.getElementById('pane-'+tab).classList.add('active');
+  document.getElementById('login-error').classList.remove('show');
+  document.getElementById('login-success').classList.remove('show');
+}
+
+function showLoginErr(msg){
+  var el=document.getElementById('login-error');
+  document.getElementById('login-error-msg').textContent=msg;
+  el.classList.add('show');
+  document.getElementById('login-success').classList.remove('show');
+}
+function showLoginOk(msg){
+  var el=document.getElementById('login-success');
+  document.getElementById('login-success-msg').textContent=msg;
+  el.classList.add('show');
+  document.getElementById('login-error').classList.remove('show');
+}
+
+// ── FIREBASE INIT ─────────────────────────────────────
+function isConfigured(){
+  return FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.length > 10;
+}
+
+(function initFirebase(){
+  showLoading('Conectando ao Firebase...');
+
+  if(!isConfigured()){
+    document.getElementById('cfg-banner').classList.add('show');
+    document.getElementById('login-screen').classList.add('show');
+    hideLoading();
+    return;
+  }
+
+  try {
+    // Evita inicializar duas vezes
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    _auth = firebase.auth();
+    _db   = firebase.firestore();
+
+    // Persistência offline (ignora erros silenciosamente)
+    _db.enablePersistence({synchronizeTabs:true}).catch(function(e){
+      console.warn('Persistência offline não disponível:', e.code);
+    });
+
+    window.addEventListener('online',  function(){setFbBadge(true)});
+    window.addEventListener('offline', function(){setFbBadge(false)});
+
+    _auth.onAuthStateChanged(function(fbUser){
+      if(fbUser){
+        showLoading('Carregando perfil...');
+        loadUserProfile(fbUser);
+      } else {
+        currentUser = null;
+        document.getElementById('app').classList.remove('show');
+        document.getElementById('login-screen').classList.add('show');
+        var btn=document.getElementById('login-btn');
+        if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i>Entrar';}
+        var rbtn=document.getElementById('reg-btn');
+        if(rbtn){rbtn.disabled=false;rbtn.innerHTML='<i class="ti ti-user-plus"></i>Criar conta';}
+        hideLoading();
+      }
+    });
+  } catch(e) {
+    console.error('Firebase init error:', e);
+    document.getElementById('login-screen').classList.add('show');
+    hideLoading();
+    showLoginErr('Erro ao inicializar Firebase: '+e.message);
+  }
+})();
+
+function setFbBadge(online){
+  var b=document.getElementById('fb-badge');if(!b)return;
+  b.className='fb-badge'+(online?'':' offline');
+  b.innerHTML='<i class="ti ti-cloud'+(online?'':'-off')+'"></i><span>'+(online?'Online':'Offline')+'</span>';
+}
+
+// ── FIRESTORE CRUD ────────────────────────────────────
+function col(name){return _db.collection(name)}
+
+function getAll(colName,cb){
+  if(_cache[colName]){cb(_cache[colName]);return}
+  col(colName).get().then(function(snap){
+    var list=[];
+    snap.forEach(function(d){list.push(Object.assign({id:d.id},d.data()))});
+    _cache[colName]=list;cb(list);
+  }).catch(function(e){console.warn('getAll '+colName,e);cb([])});
+}
+function getCache(colName){return _cache[colName]||[]}
+
+function saveDoc(colName,data,cb){
+  var id=data.id||uid();
+  var payload=Object.assign({},data,{id:id,_updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  if(!data._createdAt) payload._createdAt=firebase.firestore.FieldValue.serverTimestamp();
+  col(colName).doc(id).set(payload,{merge:true}).then(function(){
+    var arr=_cache[colName]||[];
+    var idx=-1;for(var i=0;i<arr.length;i++){if(arr[i].id===id){idx=i;break}}
+    if(idx>=0)arr[idx]=Object.assign({},arr[idx],payload);else arr.push(Object.assign({},payload));
+    _cache[colName]=arr;
+    if(cb)cb(null,id);
+  }).catch(function(e){if(cb)cb(e)});
+}
+
+function deleteDoc(colName,id,cb){
+  col(colName).doc(id).delete().then(function(){
+    if(_cache[colName])_cache[colName]=_cache[colName].filter(function(x){return x.id!==id});
+    if(cb)cb(null);
+  }).catch(function(e){if(cb)cb(e)});
+}
+
+function getSubDoc(colName,docId,cb){
+  col(colName).doc(docId).get().then(function(d){cb(d.exists?d.data():{})}).catch(function(){cb({})});
+}
+function setSubDoc(colName,docId,data,cb){
+  col(colName).doc(docId).set(Object.assign({},data,{_updatedAt:firebase.firestore.FieldValue.serverTimestamp()}),{merge:true})
+    .then(function(){if(cb)cb(null)}).catch(function(e){if(cb)cb(e)});
+}
+
+// ── AUTH: LOGIN / REGISTRO / RESET ───────────────────
+function doLogin(){
+  var email=document.getElementById('login-user').value.trim();
+  var senha=document.getElementById('login-pass').value;
+  if(!email||!senha){showLoginErr('Preencha e-mail e senha');return}
+  var btn=document.getElementById('login-btn');
+  btn.disabled=true;btn.innerHTML='<div class="spinner" style="width:18px;height:18px;border-width:2px"></div>';
+  _auth.signInWithEmailAndPassword(email,senha).catch(function(e){
+    btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i>Entrar';
+    var msg='Erro ao entrar.';
+    if(e.code==='auth/user-not-found'||e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')msg='E-mail ou senha incorretos.';
+    else if(e.code==='auth/too-many-requests')msg='Muitas tentativas. Tente novamente mais tarde.';
+    else if(e.code==='auth/user-disabled')msg='Usuário desabilitado. Contate o administrador.';
+    else if(e.code==='auth/invalid-email')msg='E-mail inválido.';
+    else msg=e.message;
+    showLoginErr(msg);
+  });
+}
+
+function doRegister(){
+  var nome=document.getElementById('reg-nome').value.trim();
+  var email=document.getElementById('reg-email').value.trim();
+  var senha=document.getElementById('reg-pass').value;
+  var senha2=document.getElementById('reg-pass2').value;
+  if(!nome||!email||!senha){showLoginErr('Preencha todos os campos');return}
+  if(senha.length<6){showLoginErr('A senha deve ter no mínimo 6 caracteres');return}
+  if(senha!==senha2){showLoginErr('As senhas não coincidem');return}
+  var btn=document.getElementById('reg-btn');
+  btn.disabled=true;btn.innerHTML='<div class="spinner" style="width:18px;height:18px;border-width:2px"></div>';
+  _auth.createUserWithEmailAndPassword(email,senha).then(function(cred){
+    return cred.user.updateProfile({displayName:nome}).then(function(){
+      return setupFirstUser(cred.user.uid, nome, email);
+    });
+  }).then(function(){
+    showLoginOk('Conta criada com sucesso! Entrando...');
+  }).catch(function(e){
+    btn.disabled=false;btn.innerHTML='<i class="ti ti-user-plus"></i>Criar conta';
+    var msg=e.message;
+    if(e.code==='auth/email-already-in-use')msg='Este e-mail já está cadastrado. Use a aba "Entrar".';
+    else if(e.code==='auth/weak-password')msg='Senha muito fraca.';
+    else if(e.code==='auth/invalid-email')msg='E-mail inválido.';
+    showLoginErr(msg);
+  });
+}
+
+function setupFirstUser(uid, nome, email){
+  var ts=firebase.firestore.FieldValue.serverTimestamp();
+  var batch=_db.batch();
+  var perfis=[
+    {id:'admin',nome:'Administrador',desc:'Acesso total',perms:ALL_SECTIONS.map(function(s){return s.id}),bloqueado:true},
+    {id:'dentista',nome:'Dentista',desc:'Clínica e pacientes',perms:['dashboard','agenda','pacientes','prontuario','documentos','exames','tarefas','aniversariantes']},
+    {id:'recepcionista',nome:'Recepcionista',desc:'Agenda e pacientes',perms:['dashboard','agenda','pacientes','tarefas','aniversariantes']},
+    {id:'financeiro',nome:'Financeiro',desc:'Financeiro e estoque',perms:['dashboard','financeiro','relatorios','estoque']}
+  ];
+  perfis.forEach(function(p){batch.set(col('perfis').doc(p.id),Object.assign({},p,{_createdAt:ts}))});
+  batch.set(col('usuarios').doc(uid),{
+    id:uid,nome:nome,email:email,perfil:'admin',status:'ativo',createdAt:today(),_createdAt:ts
+  });
+  return batch.commit();
+}
+
+function doResetPass(){
+  var email=document.getElementById('reset-email').value.trim();
+  if(!email){showLoginErr('Digite seu e-mail');return}
+  _auth.sendPasswordResetEmail(email).then(function(){
+    showLoginOk('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
+  }).catch(function(e){
+    var msg=e.message;
+    if(e.code==='auth/user-not-found')msg='E-mail não encontrado.';
+    showLoginErr(msg);
+  });
+}
+
+function doLogout(){
+  if(!currentUser)return;
+  addLog('logout','Logout efetuado','',currentUser,function(){
+    _auth.signOut();_cache={};
+  });
+}
+
+// Tecla Enter no login
+document.getElementById('login-pass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin()});
+document.getElementById('login-user').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin()});
+
+// ── PERFIL DO USUÁRIO ─────────────────────────────────
+function loadUserProfile(fbUser){
+  col('usuarios').doc(fbUser.uid).get().then(function(doc){
+    if(!doc.exists){
+      col('usuarios').limit(1).get().then(function(snap){
+        if(snap.empty){
+          // Nenhum usuário ainda — cria o admin automaticamente
+          setupFirstUser(fbUser.uid, fbUser.displayName||fbUser.email, fbUser.email).then(function(){
+            loadUserProfile(fbUser);
+          }).catch(function(e){showLoginErr('Erro ao configurar: '+e.message);_auth.signOut();hideLoading()});
+        } else {
+          showLoginErr('Usuário sem cadastro no sistema. Contate o administrador.');
+          _auth.signOut();hideLoading();
+        }
+      });
+      return;
+    }
+    var data=doc.data();
+    if(data.status==='inativo'){showLoginErr('Usuário inativo.');_auth.signOut();hideLoading();return}
+    currentUser=Object.assign({id:fbUser.uid},data);
+    var cols=['perfis','usuarios','pacientes','profissionais','agendamentos','financeiro','estoque','tarefas'];
+    var done=0;
+    cols.forEach(function(c){getAll(c,function(){done++;if(done===cols.length)onAppReady()})});
+  }).catch(function(e){showLoginErr('Erro ao carregar perfil: '+e.message);_auth.signOut();hideLoading()});
+}
+
+function onAppReady(){
+  addLog('login','Login efetuado','',currentUser,function(){});
+  document.getElementById('login-screen').classList.remove('show');
+  document.getElementById('app').classList.add('show');
+  applyPermissions();buildOdontograma();
+  selDate=today();
+  var p=today().split('-');
+  document.getElementById('agenda-date-label').textContent=parseInt(p[2])+'/'+parseInt(p[1])+'/'+p[0];
+  renderCal();renderDashboard();checkMigration();
+  hideLoading();
+}
+
+// ── PERMISSÕES ────────────────────────────────────────
+function getUserPerms(){
+  if(!currentUser)return[];
+  var ps=getCache('perfis');
+  for(var i=0;i<ps.length;i++){if(ps[i].id===currentUser.perfil)return ps[i].perms||[]}
+  return[];
+}
+function canAccess(s){return getUserPerms().indexOf(s)>=0}
+
+function applyPermissions(){
+  var perms=getUserPerms();
+  document.querySelectorAll('nav a[data-section]').forEach(function(a){
+    a.style.display=perms.indexOf(a.dataset.section)>=0?'flex':'none';
+  });
+  var av=document.getElementById('top-avatar');if(av)av.textContent=initials(currentUser.nome);
+  var sbAv=document.getElementById('sb-avatar');
+  if(sbAv){sbAv.textContent=initials(currentUser.nome);sbAv.style.background=avatarColor(currentUser.nome)}
+  document.getElementById('sb-user-name').textContent=currentUser.nome;
+  var ps=getCache('perfis'),p=null;
+  for(var i=0;i<ps.length;i++){if(ps[i].id===currentUser.perfil){p=ps[i];break}}
+  document.getElementById('sb-user-role').textContent=p?p.nome:'—';
+  var btn=document.getElementById('btn-novo-agend');
+  if(btn)btn.style.display=canAccess('agenda')?'inline-flex':'none';
+}
+
+// ── MIGRAÇÃO LOCALSTORAGE → FIRESTORE ─────────────────
+function checkMigration(){
+  var PREFIXES=['odonto_','odonto2_','odonto3_','odonto4_','odonto5_','odonto6_','odonto7_'];
+  var found=false,prefix='';
+  for(var i=0;i<PREFIXES.length;i++){if(localStorage.getItem(PREFIXES[i]+'pacientes')){found=true;prefix=PREFIXES[i];break}}
+  if(!found)return;
+  var area=document.getElementById('migration-area');
+  area.innerHTML='<div class="migration-banner">'+
+    '<i class="ti ti-database-import"></i>'+
+    '<div class="mb-text"><div class="mb-title">Dados locais detectados</div>'+
+    '<div class="mb-sub">Encontramos dados do sistema anterior ('+prefix+'*). Deseja importar para o Firebase?</div></div>'+
+    '<button class="btn btn-primary btn-sm" onclick="runMigration(\''+prefix+'\')"><i class="ti ti-upload"></i>Importar agora</button>'+
+    '<button class="btn btn-outline btn-sm" onclick="dismissMigration()"><i class="ti ti-x"></i>Ignorar</button>'+
+    '</div>';
+}
+function dismissMigration(){document.getElementById('migration-area').innerHTML=''}
+function runMigration(prefix){
+  showLoading('Importando dados...');
+  var COLLECTIONS=['pacientes','agendamentos','financeiro','tarefas','estoque','profissionais','documentos','exames','planos','atendimentos','contas','perfis','usuarios'];
+  var total=0,batches=[],currentBatch=_db.batch(),opCount=0;
+  COLLECTIONS.forEach(function(c){
+    try{
+      var raw=localStorage.getItem(prefix+c);if(!raw)return;
+      var items=JSON.parse(raw);if(!Array.isArray(items)||!items.length)return;
+      items.forEach(function(item){
+        if(!item.id)item.id=uid();
+        currentBatch.set(col(c).doc(item.id),Object.assign({},item,{_migratedAt:firebase.firestore.FieldValue.serverTimestamp()}),{merge:true});
+        opCount++;total++;
+        if(opCount>=490){batches.push(currentBatch);currentBatch=_db.batch();opCount=0}
+      });
+    }catch(e){console.warn('Migration '+c,e)}
+  });
+  if(opCount>0)batches.push(currentBatch);
+  var chain=Promise.resolve();
+  batches.forEach(function(b){chain=chain.then(function(){return b.commit()})});
+  chain.then(function(){
+    _cache={};
+    var cols=['perfis','usuarios','pacientes','profissionais','agendamentos','financeiro','estoque','tarefas'];
+    var rd=0;
+    cols.forEach(function(c){getAll(c,function(){rd++;if(rd===cols.length){
+      hideLoading();
+      document.getElementById('migration-area').innerHTML='<div class="migration-banner" style="background:#e8f5e9;border-color:#a5d6a7"><i class="ti ti-circle-check" style="color:#2e7d32"></i><div class="mb-text"><div class="mb-title" style="color:#2e7d32">Importação concluída!</div><div class="mb-sub">'+total+' registros importados.</div></div><button class="btn btn-outline btn-sm" onclick="dismissMigration()">Fechar</button></div>';
+      renderDashboard();
+    }})});
+  }).catch(function(e){hideLoading();showNotif('Erro na migração: '+e.message,'error')});
+}
+
+// ── LOGS ──────────────────────────────────────────────
+function addLog(type,action,detail,user,cb){
+  var u=user||currentUser;if(!u||!_db)return;
+  var entry={id:uid(),type:type,action:action,detail:detail||'',userId:u.id,userName:u.nome,userEmail:u.email||'',ts:new Date().toISOString(),tsDisplay:nowStr()};
+  col('logs').doc(entry.id).set(entry).then(function(){if(cb)cb()}).catch(function(){if(cb)cb()});
+}
+function renderLogs(){
+  var fu=document.getElementById('log-filter-user').value;
+  var ft=document.getElementById('log-filter-type').value;
+  var fd=document.getElementById('log-filter-date').value;
+  col('logs').orderBy('ts','desc').limit(300).get().then(function(snap){
+    var allLogs=[];snap.forEach(function(d){allLogs.push(Object.assign({id:d.id},d.data()))});
+    var list=allLogs.filter(function(l){return(!fu||l.userId===fu)&&(!ft||l.type===ft)&&(!fd||l.ts.slice(0,10)===fd)});
+    var usrs=getCache('usuarios');
+    var uf=document.getElementById('log-filter-user');var curU=uf.value;
+    uf.innerHTML='<option value="">Todos usuários</option>'+usrs.map(function(u){return'<option value="'+u.id+'">'+u.nome+'</option>'}).join('');uf.value=curU;
+    document.getElementById('log-count').textContent='— '+list.length+' registro'+(list.length!==1?'s':'');
+    var types=['login','logout','create','edit','delete','view'];
+    var tL={login:'Logins',logout:'Logouts',create:'Criações',edit:'Edições',delete:'Exclusões',view:'Visualizações'};
+    var tC={login:'badge-green',logout:'badge-gray',create:'badge-blue',edit:'badge-amber',delete:'badge-red',view:'badge-purple'};
+    var counts={};allLogs.forEach(function(l){counts[l.type]=(counts[l.type]||0)+1});
+    document.getElementById('log-stats').innerHTML=types.map(function(t){return'<span class="badge '+tC[t]+'">'+tL[t]+': '+(counts[t]||0)+'</span>'}).join('');
+    var el=document.getElementById('logs-list');
+    if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-activity"></i>Nenhum registro</div>';return}
+    var icons={login:'ti-login',logout:'ti-logout',create:'ti-plus',edit:'ti-edit',delete:'ti-trash',view:'ti-eye'};
+    var icls={login:'log-login',logout:'log-logout',create:'log-create',edit:'log-edit',delete:'log-delete',view:'log-view'};
+    el.innerHTML=list.map(function(l){
+      return'<div class="log-item"><div class="log-icon '+(icls[l.type]||'log-view')+'"><i class="ti '+(icons[l.type]||'ti-point')+'"></i></div>'+
+        '<div class="log-info"><div class="log-action">'+l.action+'</div><div class="log-meta">'+(l.detail||'')+' · <b>'+l.userName+'</b></div></div>'+
+        '<div class="log-time">'+l.tsDisplay+'</div></div>';
+    }).join('');
+  }).catch(function(e){console.error(e)});
+}
+function clearLogFilters(){['log-filter-user','log-filter-type','log-filter-date'].forEach(function(i){var el=document.getElementById(i);if(el)el.value=''});renderLogs()}
+function clearAllLogs(){
+  if(!confirm('Limpar todos os logs?'))return;
+  col('logs').get().then(function(snap){var b=_db.batch();snap.forEach(function(d){b.delete(d.ref)});return b.commit()})
+    .then(function(){addLog('delete','Logs limpos','');renderLogs();showNotif('Logs limpos','success')});
+}
+
+// ── USUÁRIOS ──────────────────────────────────────────
+function saveUsuario(){
+  var id=document.getElementById('usr-edit-id').value;
+  var nome=document.getElementById('usr-nome').value.trim();
+  var email=document.getElementById('usr-email').value.trim();
+  var senha=document.getElementById('usr-senha').value;
+  var perfil=document.getElementById('usr-perfil').value;
+  if(!nome||!email){showNotif('Preencha nome e e-mail','error');return}
+  if(!perfil){showNotif('Selecione o perfil','error');return}
+  if(id){
+    var upd={id:id,nome:nome,email:email,perfil:perfil,status:document.getElementById('usr-status').value};
+    col('usuarios').doc(id).set(upd,{merge:true}).then(function(){
+      if(_cache['usuarios']){var arr=_cache['usuarios'];for(var i=0;i<arr.length;i++){if(arr[i].id===id){Object.assign(arr[i],upd);break}}}
+      closeModal('addUsuario');clearUsrForm();addLog('edit','Usuário editado','E-mail: '+email);showNotif('Atualizado!','success');renderUsuarios();
+    }).catch(function(e){showNotif('Erro: '+e.message,'error')});
+  } else {
+    if(!senha||senha.length<6){showNotif('Senha mínima 6 caracteres','error');return}
+    var appName='tmp_'+uid();var secondApp;
+    try{secondApp=firebase.initializeApp(FIREBASE_CONFIG,appName)}catch(e){secondApp=firebase.app(appName)}
+    secondApp.auth().createUserWithEmailAndPassword(email,senha).then(function(cred){
+      var newUid=cred.user.uid;
+      return cred.user.updateProfile({displayName:nome}).then(function(){
+        return col('usuarios').doc(newUid).set({id:newUid,nome:nome,email:email,perfil:perfil,status:document.getElementById('usr-status').value,createdAt:today(),_createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      }).then(function(){
+        secondApp.auth().signOut();secondApp.delete().catch(function(){});
+        _cache['usuarios']=null;
+        getAll('usuarios',function(){closeModal('addUsuario');clearUsrForm();addLog('create','Novo usuário criado','E-mail: '+email);showNotif('Usuário criado!','success');renderUsuarios()});
+      });
+    }).catch(function(e){
+      secondApp.delete().catch(function(){});
+      var msg=e.code==='auth/email-already-in-use'?'E-mail já cadastrado.':e.code==='auth/weak-password'?'Senha fraca.':e.message;
+      showNotif(msg,'error');
+    });
+  }
+}
+function clearUsrForm(){
+  document.getElementById('usr-modal-title').textContent='Novo Usuário';
+  document.getElementById('usr-edit-id').value='';
+  ['usr-nome','usr-email','usr-senha'].forEach(function(i){var el=document.getElementById(i);if(el)el.value=''});
+  document.getElementById('usr-edit-note').style.display='none';
+  document.getElementById('usr-reset-area').style.display='none';
+  var sw=document.getElementById('usr-senha-wrap');if(sw)sw.style.display='';
+}
+function editUsuario(id){
+  var arr=getCache('usuarios'),u=null;for(var i=0;i<arr.length;i++){if(arr[i].id===id){u=arr[i];break}}if(!u)return;
+  document.getElementById('usr-modal-title').textContent='Editar Usuário';
+  document.getElementById('usr-edit-id').value=u.id;
+  document.getElementById('usr-nome').value=u.nome||'';document.getElementById('usr-email').value=u.email||'';document.getElementById('usr-senha').value='';
+  document.getElementById('usr-edit-note').style.display='block';document.getElementById('usr-reset-area').style.display='block';
+  document.getElementById('usr-reset-area').dataset.email=u.email;
+  var sw=document.getElementById('usr-senha-wrap');if(sw)sw.style.display='none';
+  openModal('addUsuario');
+  setTimeout(function(){document.getElementById('usr-perfil').value=u.perfil||'';document.getElementById('usr-status').value=u.status||'ativo'},40);
+}
+function sendResetEmail(){
+  var email=document.getElementById('usr-reset-area').dataset.email;if(!email)return;
+  _auth.sendPasswordResetEmail(email).then(function(){showNotif('E-mail de reset enviado','success')}).catch(function(e){showNotif('Erro: '+e.message,'error')});
+}
+function deleteUsuario(id){
+  if(id===currentUser.id){showNotif('Não é possível excluir você mesmo','error');return}
+  if(!confirm('Desativar este usuário?'))return;
+  col('usuarios').doc(id).update({status:'inativo'}).then(function(){
+    if(_cache['usuarios']){var arr=_cache['usuarios'];for(var i=0;i<arr.length;i++){if(arr[i].id===id){arr[i].status='inativo';break}}}
+    addLog('delete','Usuário desativado','ID: '+id);showNotif('Desativado','success');renderUsuarios();
+  });
+}
+function renderUsuarios(){
+  var list=getCache('usuarios'),perfis=getCache('perfis'),el=document.getElementById('usuarios-list');
+  if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-users"></i>Nenhum usuário</div>';return}
+  var rC={admin:'role-admin',dentista:'role-dentista',recepcionista:'role-recep',financeiro:'role-financeiro'};
+  el.innerHTML=list.map(function(u){
+    var p=null;for(var i=0;i<perfis.length;i++){if(perfis[i].id===u.perfil){p=perfis[i];break}}
+    var isMe=u.id===currentUser.id;
+    return'<div class="user-card">'+
+      '<div class="patient-avatar" style="background:'+avatarColor(u.nome)+';width:40px;height:40px;font-size:13px;min-width:40px">'+initials(u.nome)+'</div>'+
+      '<div class="user-card-info"><div class="user-card-name">'+u.nome+(isMe?' <span class="badge badge-blue" style="font-size:10px">Você</span>':'')+'</div>'+
+      '<div class="user-card-sub">'+(u.email||'—')+' · <span class="role-badge '+(rC[u.perfil]||'role-recep')+'">'+(p?p.nome:'—')+'</span></div></div>'+
+      '<span class="badge '+(u.status==='ativo'?'badge-green':'badge-red')+'">'+u.status+'</span>'+
+      '<button class="btn btn-outline btn-sm" onclick="editUsuario(\''+u.id+'\')"><i class="ti ti-edit"></i></button>'+
+      (!isMe?'<button class="btn btn-danger btn-sm" onclick="deleteUsuario(\''+u.id+'\')"><i class="ti ti-trash"></i></button>':'')+
+      '</div>';
+  }).join('');
+}
+
+// ── PERFIS ────────────────────────────────────────────
+function buildPermCheckboxes(sel){
+  sel=sel||[];
+  return ALL_SECTIONS.map(function(s){
+    return'<div class="perm-item"><input type="checkbox" id="perm-'+s.id+'" value="'+s.id+'"'+(sel.indexOf(s.id)>=0?' checked':'')+'>'+
+      '<i class="ti '+s.icon+'" style="font-size:15px;color:#546e7a"></i><span>'+s.label+'</span></div>';
+  }).join('');
+}
+function savePerfil(){
+  var id=document.getElementById('prf-edit-id').value;
+  var nome=document.getElementById('prf-nome').value.trim();
+  if(!nome){showNotif('Informe o nome','error');return}
+  var perms=ALL_SECTIONS.filter(function(s){var el=document.getElementById('perm-'+s.id);return el&&el.checked}).map(function(s){return s.id});
+  var p={id:id||uid(),nome:nome,desc:document.getElementById('prf-desc').value,perms:perms};
+  saveDoc('perfis',p,function(e){
+    if(e){showNotif('Erro: '+e.message,'error');return}
+    closeModal('addPerfil');document.getElementById('prf-modal-title').textContent='Novo Perfil';document.getElementById('prf-edit-id').value='';
+    addLog(id?'edit':'create',id?'Perfil editado':'Perfil criado','Perfil: '+nome);showNotif(id?'Atualizado!':'Criado!','success');renderPerfis();
+  });
+}
+function editPerfil(id){
+  var ps=getCache('perfis'),p=null;for(var i=0;i<ps.length;i++){if(ps[i].id===id){p=ps[i];break}}if(!p)return;
+  document.getElementById('prf-modal-title').textContent='Editar Perfil';document.getElementById('prf-edit-id').value=p.id;
+  document.getElementById('prf-nome').value=p.nome;document.getElementById('prf-desc').value=p.desc||'';
+  document.getElementById('perm-checkboxes').innerHTML=buildPermCheckboxes(p.perms||[]);
+  openModal('addPerfil');
+}
+function deletePerfil(id){
+  if(id==='admin'){showNotif('Perfil Admin não pode ser removido','error');return}
+  if(!confirm('Excluir?'))return;
+  deleteDoc('perfis',id,function(e){
+    if(e){showNotif('Erro: '+e.message,'error');return}
+    addLog('delete','Perfil excluído','ID: '+id);showNotif('Removido','');renderPerfis();
+  });
+}
+function renderPerfis(){
+  var list=getCache('perfis'),el=document.getElementById('perfis-list');
+  if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-shield"></i>Nenhum perfil</div>';return}
+  el.innerHTML=list.map(function(p){
+    var tags=(p.perms||[]).map(function(s){var sc=null;for(var i=0;i<ALL_SECTIONS.length;i++){if(ALL_SECTIONS[i].id===s){sc=ALL_SECTIONS[i];break}}return sc?'<span class="tag badge-blue">'+sc.label+'</span>':''}).join('');
+    return'<div class="card" style="margin:0">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'+
+        '<div style="width:40px;height:40px;border-radius:10px;background:#e3f2fd;display:flex;align-items:center;justify-content:center"><i class="ti ti-shield-check" style="font-size:20px;color:#1565C0"></i></div>'+
+        '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#1a237e">'+p.nome+'</div><div style="font-size:11px;color:#78909c">'+(p.desc||'—')+'</div></div>'+
+        '<div style="display:flex;gap:4px"><button class="btn btn-outline btn-sm" onclick="editPerfil(\''+p.id+'\')"><i class="ti ti-edit"></i></button>'+
+        (p.id!=='admin'?'<button class="btn btn-danger btn-sm" onclick="deletePerfil(\''+p.id+'\')"><i class="ti ti-trash"></i></button>':'')+
+      '</div></div><div style="display:flex;flex-wrap:wrap;gap:4px">'+tags+'</div>'+
+      '<div style="font-size:11px;color:#78909c;margin-top:8px">'+((p.perms||[]).length)+' permissão(ões)</div></div>';
+  }).join('');
+}
+
+// ── NOTIF / MODAL ─────────────────────────────────────
+var _nt;
+function showNotif(msg,type){
+  type=type||'';
+  var n=document.getElementById('notif');
+  n.className='notif show'+(type==='success'?' success':type==='error'?' error':'');
+  document.getElementById('notif-msg').textContent=msg;
+  clearTimeout(_nt);_nt=setTimeout(function(){n.classList.remove('show')},3000);
+}
+function openModal(id){
+  var el=document.getElementById('modal-'+id);if(!el)return;el.classList.add('open');
+  var dm={addAppt:'appt-data',addExame:'exam-data',addFinanceiro:'fin-data',receita:'rec-data',atestado:'ates-data',addAtendimento:'at-data',addConta:'conta-vencimento'};
+  if(dm[id]){var f=document.getElementById(dm[id]);if(f&&!f.value)f.value=today()}
+  if(id==='addPerfil'&&!document.getElementById('prf-edit-id').value)document.getElementById('perm-checkboxes').innerHTML=buildPermCheckboxes([]);
+  populateSelects(id);
+}
+function closeModal(id){var el=document.getElementById('modal-'+id);if(el)el.classList.remove('open')}
+document.querySelectorAll('.modal-bg').forEach(function(m){m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('open')})});
+
+function populateSelects(modal){
+  var pacs=getCache('pacientes'),meds=getCache('profissionais'),perfis=getCache('perfis');
+  var nP='<option value="">— Selecionar —</option>';
+  var opP=nP+pacs.map(function(p){return'<option value="'+p.id+'">'+p.nome+'</option>'}).join('');
+  var opM=nP+meds.map(function(m){return'<option value="'+m.id+'">'+m.nome+'</option>'}).join('');
+  var mapP={addAppt:'appt-paciente',addTask:'task-pac',addFinanceiro:'fin-pac',receita:'rec-pac',atestado:'ates-pac',addExame:'exam-pac',addConta:'conta-pac'};
+  var mapM={receita:'rec-medico',atestado:'ates-medico',addAtendimento:'at-dentista'};
+  if(mapP[modal]){var e1=document.getElementById(mapP[modal]);if(e1)e1.innerHTML=opP}
+  if(mapM[modal]){var e2=document.getElementById(mapM[modal]);if(e2)e2.innerHTML=opM}
+  if(modal==='addAppt'){var e3=document.getElementById('appt-prof');if(e3)e3.innerHTML=nP+meds.map(function(m){return'<option value="'+m.id+'">'+m.nome+'</option>'}).join('')}
+  if(modal==='addPlano'){var e5=document.getElementById('plano-prof');if(e5)e5.innerHTML=opM}
+  if(modal==='addUsuario'){var e4=document.getElementById('usr-perfil');if(e4)e4.innerHTML=nP+perfis.map(function(p){return'<option value="'+p.id+'">'+p.nome+'</option>'}).join('')}
+  var fp=document.getElementById('filter-prof');if(fp){var c=fp.value;fp.innerHTML='<option value="">Todos</option>'+meds.map(function(m){return'<option value="'+m.id+'">'+m.nome+'</option>'}).join('');fp.value=c}
+  var rp=document.getElementById('rel-prof');if(rp){var rc=rp.value;rp.innerHTML='<option value="">Todos</option>'+meds.map(function(m){return'<option value="'+m.id+'">'+m.nome+'</option>'}).join('');rp.value=rc}
+  if(modal==='receita'&&window._currentPacId){setTimeout(function(){var el=document.getElementById('rec-pac');if(el){el.value=window._currentPacId;updateReceitaPreview()}},30)}
+}
+
+// ── NAV / SIDEBAR ─────────────────────────────────────
+function toggleNavGroup(header,groupId){var group=document.getElementById(groupId);if(!group)return;var isC=group.classList.toggle('collapsed');header.classList.toggle('collapsed',isC)}
+function expandGroupOf(sectionId){var link=document.querySelector('nav a[data-section="'+sectionId+'"]');if(!link)return;var group=link.closest('.nav-group-items');if(!group)return;group.classList.remove('collapsed');var header=group.previousElementSibling;if(header&&header.classList.contains('nav-section'))header.classList.remove('collapsed')}
+function toggleSidebar(){var sb=document.getElementById('sidebar'),hb=document.getElementById('hamburger'),ov=document.getElementById('overlay');var open=sb.classList.toggle('open');hb.classList.toggle('open',open);ov.classList.toggle('show',open)}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('hamburger').classList.remove('open');document.getElementById('overlay').classList.remove('show')}
+var TITLES={dashboard:'Dashboard',agenda:'Agenda',pacientes:'Pacientes',prontuario:'Prontuário',documentos:'Documentos',exames:'Exames',tarefas:'Tarefas',aniversariantes:'Aniversariantes',profissionais:'Profissionais',financeiro:'Financeiro',relatorios:'Relatórios Gerenciais',estoque:'Estoque',usuarios:'Usuários',perfis:'Perfis de Acesso',logs:'Logs do Sistema'};
+function goTo(id,el){
+  if(!canAccess(id)){
+    document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active')});
+    var sec=document.getElementById('section-'+id);if(sec){sec.classList.add('active');sec.innerHTML='<div class="access-denied"><i class="ti ti-lock"></i><div style="font-size:16px;font-weight:600;color:#c62828">Acesso Negado</div><div style="font-size:13px;margin-top:6px">Sem permissão para esta seção.</div></div>'}
+    document.getElementById('topbar-title').textContent=TITLES[id]||id;closeSidebar();return;
+  }
+  document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active')});
+  document.querySelectorAll('nav a').forEach(function(a){a.classList.remove('active')});
+  var sec=document.getElementById('section-'+id);if(sec)sec.classList.add('active');
+  if(el)el.classList.add('active');
+  document.getElementById('topbar-title').textContent=TITLES[id]||id;
+  expandGroupOf(id);addLog('view','Acessou '+(TITLES[id]||id),'');
+  if(renders[id])renders[id]();
+  closeSidebar();
+}
+function finTab(btn,pane){
+  document.querySelectorAll('#section-financeiro .pron-tab-btn').forEach(function(b){b.classList.remove('active')});
+  document.querySelectorAll('.fin-pane').forEach(function(p){p.style.display='none';p.classList.remove('active')});
+  btn.classList.add('active');var el=document.getElementById('fin-'+pane);if(el){el.style.display='block';el.classList.add('active')}
+  if(pane==='movimentacoes')renderFinanceiro();if(pane==='contas')renderContas();
+  if(pane==='comissoes'){var cm=document.getElementById('com-mes');if(cm&&!cm.value)cm.value=new Date().toISOString().slice(0,7);calcComissoes()}
+}
+
+// ── PACIENTES ─────────────────────────────────────────
+function savePaciente(){
+  var id=document.getElementById('pac-edit-id').value;
+  var nome=document.getElementById('pac-nome').value.trim();
+  if(!nome){showNotif('Informe o nome','error');return}
+  var cats=['cat-ortod','cat-implan','cat-urg','cat-inf','cat-idoso'].reduce(function(a,c){var el=document.getElementById(c);if(el&&el.checked)a.push(el.value);return a},[]);
+  var p={id:id||uid(),nome:nome,cpf:document.getElementById('pac-cpf').value,nasc:document.getElementById('pac-nasc').value,sexo:document.getElementById('pac-sexo').value,tel:document.getElementById('pac-tel').value,email:document.getElementById('pac-email').value,convenio:document.getElementById('pac-convenio').value,alergias:document.getElementById('pac-alergias').value,obs:document.getElementById('pac-obs').value,cats:cats,createdAt:today()};
+  saveDoc('pacientes',p,function(e){
+    if(e){showNotif('Erro: '+e.message,'error');return}
+    closeModal('addPaciente');clearPacForm();addLog(id?'edit':'create',id?'Paciente editado':'Paciente cadastrado','Nome: '+nome);showNotif(id?'Atualizado!':'Cadastrado!','success');renderPacientes();
+  });
+}
+function clearPacForm(){document.getElementById('pac-modal-title').textContent='Cadastrar Paciente';document.getElementById('pac-edit-id').value='';['pac-nome','pac-cpf','pac-tel','pac-email','pac-alergias','pac-obs'].forEach(function(i){var el=document.getElementById(i);if(el)el.value=''});['cat-ortod','cat-implan','cat-urg','cat-inf','cat-idoso'].forEach(function(c){var el=document.getElementById(c);if(el)el.checked=false})}
+function renderPacientes(){
+  var q=(document.getElementById('search-pac').value||'').toLowerCase();
+  var cat=document.getElementById('filter-cat').value;
+  var list=getCache('pacientes').filter(function(p){return(!q||p.nome.toLowerCase().indexOf(q)>=0||(p.tel||'').indexOf(q)>=0)&&(!cat||(p.cats||[]).indexOf(cat)>=0||(p.convenio||'').indexOf(cat)>=0)});
+  var el=document.getElementById('patient-list');
+  if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-users"></i>Nenhum paciente</div>';return}
+  el.innerHTML=list.map(function(p){
+    var tags=(p.cats||[]).map(function(c){return'<span class="tag badge-blue">'+c+'</span>'}).join('');
+    var ct=p.convenio?'<span class="tag '+(p.convenio==='Particular'?'badge-blue':'badge-green')+'">'+p.convenio+'</span>':'';
+    return'<div class="patient-row" onclick="openProntuario(\''+p.id+'\')">'+
+      '<div class="patient-avatar" style="background:'+avatarColor(p.nome)+'">'+initials(p.nome)+'</div>'+
+      '<div class="patient-info"><div class="patient-name">'+p.nome+'</div><div class="patient-sub">'+calcAge(p.nasc)+(p.tel?' · '+p.tel:'')+'</div></div>'+
+      '<div class="tags-row">'+ct+tags+'</div>'+
+      '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();editPaciente(\''+p.id+'\')"><i class="ti ti-edit"></i></button>'+
+      '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deletePaciente(\''+p.id+'\')"><i class="ti ti-trash"></i></button></div>';
+  }).join('');
+}
+function editPaciente(id){
+  var arr=getCache('pacientes'),p=null;for(var i=0;i<arr.length;i++){if(arr[i].id===id){p=arr[i];break}}if(!p)return;
+  document.getElementById('pac-modal-title').textContent='Editar Paciente';document.getElementById('pac-edit-id').value=p.id;
+  ['nome','cpf','nasc','sexo','tel','email','convenio','alergias','obs'].forEach(function(k){var el=document.getElementById('pac-'+k);if(el)el.value=p[k]||''});
+  ['cat-ortod','cat-implan','cat-urg','cat-inf','cat-idoso'].forEach(function(c){var el=document.getElementById(c);if(el)el.checked=(p.cats||[]).indexOf(el.value)>=0});
+  openModal('addPaciente');
+}
+function openEditPaciente(){if(window._currentPacId)editPaciente(window._currentPacId)}
+function deletePaciente(id){
+  if(!confirm('Excluir?'))return;
+  var arr=getCache('pacientes'),p=null;for(var i=0;i<arr.length;i++){if(arr[i].id===id){p=arr[i];break}}
+  deleteDoc('pacientes',id,function(e){if(e){showNotif('Erro: '+e.message,'error');return}addLog('delete','Paciente excluído',p?'Nome: '+p.nome:'');showNotif('Removido','');renderPacientes()});
+}
+
+// ── PRONTUÁRIO ────────────────────────────────────────
+function openProntuario(id){
+  var arr=getCache('pacientes'),p=null;for(var i=0;i<arr.length;i++){if(arr[i].id===id){p=arr[i];break}}if(!p)return;
+  window._currentPacId=id;
+  document.getElementById('pron-select-msg').style.display='none';document.getElementById('pron-content').style.display='block';
+  document.getElementById('pron-avatar').textContent=initials(p.nome);document.getElementById('pron-avatar').style.background=avatarColor(p.nome);
+  document.getElementById('pron-patient-name').textContent=p.nome;document.getElementById('pron-patient-sub').textContent=calcAge(p.nasc)+' · '+(p.convenio||'—');
+  document.getElementById('pron-dados').innerHTML='<table style="font-size:12px"><tr><td style="color:#78909c;padding:3px 8px 3px 0">Nasc.</td><td>'+fmtDate(p.nasc)+'</td></tr><tr><td style="color:#78909c;padding:3px 0">Tel.</td><td>'+(p.tel||'—')+'</td></tr><tr><td style="color:#78909c;padding:3px 0">E-mail</td><td style="font-size:11px">'+(p.email||'—')+'</td></tr><tr><td style="color:#78909c;padding:3px 0">Convênio</td><td>'+(p.convenio||'—')+'</td></tr></table>';
+  document.getElementById('pron-saude').innerHTML='<table style="font-size:12px"><tr><td style="color:#78909c;padding:3px 8px 3px 0">Alergias</td><td>'+(p.alergias?'<span class="badge badge-red">'+p.alergias+'</span>':'—')+'</td></tr><tr><td style="color:#78909c;padding:3px 0;vertical-align:top">Obs.</td><td style="font-size:11px">'+(p.obs||'—')+'</td></tr></table>';
+  var appts=getCache('agendamentos').filter(function(a){return a.pacienteId===id});var td=today();
+  var pastA=appts.filter(function(a){return a.data<=td}).sort(function(a,b){return b.data.localeCompare(a.data)});
+  var futA=appts.filter(function(a){return a.data>td}).sort(function(a,b){return a.data.localeCompare(b.data)});
+  document.getElementById('pron-consultas').innerHTML='<div style="font-size:22px;font-weight:600;color:#1a237e">'+appts.length+'</div><div style="font-size:11px;color:#78909c;margin-top:3px">Última: '+(pastA.length?fmtDate(pastA[0].data):'—')+'</div><div style="font-size:11px;color:#78909c">Próxima: '+(futA.length?fmtDate(futA[0].data):'—')+'</div>';
+  document.getElementById('pron-obs').textContent=p.obs||'Sem observações.';
+  getSubDoc('anamneses',id,function(an){['queixa','pressao','temp','historico','alergias','meds'].forEach(function(k){var el=document.getElementById('an-'+k);if(el)el.value=an[k]||''})});
+  loadOdontograma(id);renderPlano();renderHistorico(id);
+  addLog('view','Prontuário visualizado','Paciente: '+p.nome);
+  goTo('prontuario',document.querySelector('nav a[data-section="prontuario"]'));
+}
+function pronTab(btn,pane){
+  document.querySelectorAll('.pron-tab-btn').forEach(function(b){b.classList.remove('active')});
+  document.querySelectorAll('.pron-pane').forEach(function(p){p.classList.remove('active')});
+  btn.classList.add('active');document.getElementById('pron-'+pane).classList.add('active');
+}
+function saveAnamnese(){
+  var id=window._currentPacId;if(!id)return;
+  var data={queixa:document.getElementById('an-queixa').value,pressao:document.getElementById('an-pressao').value,temp:document.getElementById('an-temp').value,historico:document.getElementById('an-historico').value,alergias:document.getElementById('an-alergias').value,meds:document.getElementById('an-meds').value};
+  setSubDoc('anamneses',id,data,function(e){if(e){showNotif('Erro: '+e.message,'error');return}addLog('edit','Análise Clínica salva','Paciente ID: '+id);showNotif('Salvo!','success')});
+}
+function renderHistorico(id){
+  getAll('atendimentos',function(all){
+    var list=all.filter(function(a){return a.pacienteId===id}).sort(function(a,b){return(b.data||'').localeCompare(a.data||'')});
+    var el=document.getElementById('pron-hist-list');
+    if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-history"></i>Nenhum atendimento</div>';return}
+    el.innerHTML='<div class="table-wrap"><table><thead><tr><th>Data</th><th>Procedimento</th><th>Dentista</th><th>Obs</th><th></th></tr></thead><tbody>'+
+      list.map(function(a){return'<tr><td>'+fmtDate(a.data)+'</td><td>'+a.proc+'</td><td>'+(a.dentista||'—')+'</td><td>'+(a.obs||'—')+'</td><td><button class="btn btn-danger btn-sm" onclick="deleteAtendimento(\''+a.id+'\')"><i class="ti ti-trash"></i></button></td></tr>'}).join('')+'</tbody></table></div>';
+  });
+}
+function saveAtendimento(){
+  var id=window._currentPacId;if(!id)return;
+  var data=document.getElementById('at-data').value,proc=document.getElementById('at-proc').value.trim();
+  if(!data||!proc){showNotif('Preencha data e procedimento','error');return}
+  var dEl=document.getElementById('at-dentista');var dentistaNome='—';if(dEl&&dEl.selectedIndex>=0)dentistaNome=dEl.options[dEl.selectedIndex].text;
+  var entry={id:uid(),pacienteId:id,data:data,proc:proc,dentista:dentistaNome,obs:document.getElementById('at-obs').value};
+  saveDoc('atendimentos',entry,function(e){
+    if(e){showNotif('Erro: '+e.message,'error');return}
+    _cache['atendimentos']=null;closeModal('addAtendimento');addLog('create','Atendimento registrado','Proc: '+proc);showNotif('Registrado!','success');renderHistorico(id);
+  });
+}
+function deleteAtendimento(id){
+  if(!confirm('Remover?'))return;
+  deleteDoc('atendimentos',id,function(){_cache['atendimentos']=null;addLog('delete','Atendimento removido','');renderHistorico(window._currentPacId)});
+}
+
+// ── ODONTOGRAMA ───────────────────────────────────────
+var ODO_CFG={higido:{label:'Hígido',bg:'#e3f2fd',border:'#90caf9',text:'#1565C0'},carie:{label:'Cárie',bg:'#ffebee',border:'#ef9a9a',text:'#c62828'},restaurado:{label:'Restaurado',bg:'#e8f5e9',border:'#a5d6a7',text:'#2e7d32'},extraido:{label:'Extraído',bg:'#eceff1',border:'#b0bec5',text:'#78909c'},indicado:{label:'Ind. Ext.',bg:'#fff3e0',border:'#ffcc80',text:'#e65100'},coroa:{label:'Coroa',bg:'#ede7f6',border:'#ce93d8',text:'#6a1b9a'},implante:{label:'Implante',bg:'#e0f2f1',border:'#80cbc4',text:'#00695c'},fraturado:{label:'Fraturado',bg:'#fce4ec',border:'#f48fb1',text:'#880e4f'}};
+var SUP=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+var INF=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+var odoData={},odoSelected=null,odoPalette='higido';
+function toothSVG(status,isInf){
+  var cfg=ODO_CFG[status]||ODO_CFG.higido;
+  var tp=isInf?'M4,12 Q4,2 14,2 Q24,2 24,12 L22,24 Q20,32 14,32 Q8,32 6,24 Z':'M4,22 Q4,32 14,32 Q24,32 24,22 L22,10 Q20,2 14,2 Q8,2 6,10 Z';
+  var ex='';
+  if(status==='extraido')ex='<line x1="8" y1="8" x2="20" y2="26" stroke="#b0bec5" stroke-width="2.5" stroke-linecap="round"/><line x1="20" y1="8" x2="8" y2="26" stroke="#b0bec5" stroke-width="2.5" stroke-linecap="round"/>';
+  else if(status==='carie')ex='<circle cx="14" cy="17" r="5" fill="#ef9a9a" opacity="0.7"/>';
+  else if(status==='restaurado')ex='<rect x="9" y="13" width="10" height="8" rx="2" fill="#a5d6a7" opacity="0.8"/>';
+  else if(status==='coroa')ex='<path d="M8,14 Q14,8 20,14" fill="none" stroke="#ce93d8" stroke-width="2" stroke-linecap="round"/>';
+  else if(status==='implante')ex='<line x1="14" y1="8" x2="14" y2="26" stroke="#80cbc4" stroke-width="3" stroke-linecap="round"/><line x1="10" y1="12" x2="18" y2="12" stroke="#80cbc4" stroke-width="1.5"/><line x1="10" y1="16" x2="18" y2="16" stroke="#80cbc4" stroke-width="1.5"/><line x1="10" y1="20" x2="18" y2="20" stroke="#80cbc4" stroke-width="1.5"/>';
+  else if(status==='fraturado')ex='<polyline points="10,10 14,16 11,20 16,26" fill="none" stroke="#f48fb1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+  else if(status==='indicado')ex='<polygon points="14,9 20,22 8,22" fill="none" stroke="#ffcc80" stroke-width="2" stroke-linejoin="round"/><text x="14" y="21" text-anchor="middle" font-size="7" fill="#e65100" font-weight="bold">!</text>';
+  return'<svg width="32" height="40" viewBox="0 0 28 34" xmlns="http://www.w3.org/2000/svg"><path d="'+tp+'" fill="'+cfg.bg+'" stroke="'+cfg.border+'" stroke-width="1.5"/>'+ex+'</svg>';
+}
+function buildOdontograma(){
+  var pw=document.getElementById('odo-palette-wrap');
+  if(pw)pw.innerHTML='<span style="font-size:11px;font-weight:600;color:#546e7a;margin-right:4px">Status:</span>'+Object.keys(ODO_CFG).map(function(k){var v=ODO_CFG[k];return'<button class="odo-pal-btn'+(k==='higido'?' active':'')+'" data-status="'+k+'" style="background:'+v.bg+';color:'+v.text+';border-color:'+(k==='higido'?'#1565C0':v.border)+'" onclick="setPalette(this,\''+k+'\')">'+v.label+'</button>'}).join('');
+  var leg=document.getElementById('odo-legend');if(leg)leg.innerHTML=Object.keys(ODO_CFG).map(function(k){var v=ODO_CFG[k];return'<span><span class="odo-legend-dot" style="background:'+v.bg+';border-color:'+v.border+'"></span>'+v.label+'</span>'}).join('');
+  var sel=document.getElementById('odo-detail-status');if(sel)sel.innerHTML=Object.keys(ODO_CFG).map(function(k){return'<option value="'+k+'">'+ODO_CFG[k].label+'</option>'}).join('');
+  renderOdoArcades();
+}
+function setPalette(btn,status){odoPalette=status;document.querySelectorAll('.odo-pal-btn').forEach(function(b){b.classList.remove('active');b.style.borderColor=ODO_CFG[b.dataset.status]?ODO_CFG[b.dataset.status].border:'#cfd8dc'});btn.classList.add('active');btn.style.borderColor='#1565C0'}
+function renderOdoArcades(){renderOdoRow('odo-superior',SUP,false);renderOdoRow('odo-inferior',INF,true)}
+function renderOdoRow(cId,teeth,isInf){
+  var row=document.getElementById(cId);if(!row)return;row.innerHTML='';
+  teeth.forEach(function(num){
+    var d=odoData[num]||{status:'higido',obs:''};var w=document.createElement('div');
+    w.className='odo-tooth'+(odoSelected===num?' selected':'');w.title='Dente '+num+' — '+(ODO_CFG[d.status]?ODO_CFG[d.status].label:'Hígido')+(d.obs?' | '+d.obs:'');
+    w.innerHTML='<div class="odo-num">'+num+'</div>'+toothSVG(d.status,isInf)+(d.obs?'<div class="odo-obs-dot"></div>':'');
+    w.onclick=(function(n){return function(){clickTooth(n)}})(num);
+    if((cId==='odo-superior'&&num===11)||(cId==='odo-inferior'&&num===41)){var sep=document.createElement('div');sep.className='odo-separator';row.appendChild(sep)}
+    row.appendChild(w);
+  });
+}
+function clickTooth(num){odoSelected=num;if(!odoData[num])odoData[num]={status:'higido',obs:''};odoData[num].status=odoPalette;document.getElementById('odo-detail').style.display='block';document.getElementById('odo-detail-title').textContent='Dente '+num+' — '+(ODO_CFG[odoPalette]?ODO_CFG[odoPalette].label:'');document.getElementById('odo-detail-status').value=odoPalette;document.getElementById('odo-detail-obs').value=odoData[num].obs||'';renderOdoArcades()}
+function applyToothStatus(){if(!odoSelected)return;if(!odoData[odoSelected])odoData[odoSelected]={status:'higido',obs:''};var st=document.getElementById('odo-detail-status').value;odoData[odoSelected].status=st;document.getElementById('odo-detail-title').textContent='Dente '+odoSelected+' — '+(ODO_CFG[st]?ODO_CFG[st].label:'');renderOdoArcades()}
+function saveToothDetail(){if(!odoSelected)return;if(!odoData[odoSelected])odoData[odoSelected]={status:'higido',obs:''};odoData[odoSelected].status=document.getElementById('odo-detail-status').value;odoData[odoSelected].obs=document.getElementById('odo-detail-obs').value;renderOdoArcades();renderOdoSummary();showNotif('Dente salvo!','success')}
+function saveOdontograma(){var id=window._currentPacId;if(!id)return;setSubDoc('odontogramas',id,{dentes:odoData},function(e){if(e){showNotif('Erro: '+e.message,'error');return}addLog('edit','Odontograma salvo','Paciente ID: '+id);renderOdoSummary();showNotif('Odontograma salvo!','success')})}
+function loadOdontograma(id){getSubDoc('odontogramas',id,function(doc){odoData=doc.dentes||{};odoSelected=null;document.getElementById('odo-detail').style.display='none';renderOdoArcades();renderOdoSummary()})}
+function renderOdoSummary(){
+  var groups={};SUP.concat(INF).forEach(function(num){var d=odoData[num];if(d&&d.status&&d.status!=='higido'){if(!groups[d.status])groups[d.status]=[];groups[d.status].push(num)}});
+  var el=document.getElementById('odo-summary');if(!el)return;
+  var keys=Object.keys(groups);if(!keys.length){el.innerHTML='<div class="empty-state" style="padding:16px"><i class="ti ti-check"></i>Todos os dentes hígidos.</div>';return}
+  el.innerHTML=keys.map(function(st){var cfg=ODO_CFG[st]||{label:st,bg:'#eceff1',border:'#cfd8dc',text:'#546e7a'};return'<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0"><div style="width:14px;height:14px;border-radius:3px;background:'+cfg.bg+';border:1px solid '+cfg.border+';flex-shrink:0"></div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:'+cfg.text+'">'+cfg.label+'</div><div style="font-size:11px;color:#78909c">Dentes: '+groups[st].join(', ')+'</div></div><span class="badge badge-gray">'+groups[st].length+'</span></div>'}).join('');
+}
+
+// ── PLANO DE TRATAMENTO ───────────────────────────────
+function autoFillPlanoValor(){var sel=document.getElementById('plano-proc').value;if(!sel)return;var parts=sel.split('|');if(parts.length===2){document.getElementById('plano-desc').value=parts[0]==='Outro'?'':parts[0];document.getElementById('plano-valor').value=parts[1]||''}}
+function savePlano(){
+  var id=window._currentPacId;if(!id)return;
+  var editId=document.getElementById('plano-edit-id').value;
+  var procSel=document.getElementById('plano-proc').value;var desc=document.getElementById('plano-desc').value.trim();
+  var procNome=desc||(procSel?procSel.split('|')[0]:'');if(!procNome){showNotif('Informe o procedimento','error');return}
+  var profEl=document.getElementById('plano-prof');var meds=getCache('profissionais'),med=null;for(var i=0;i<meds.length;i++){if(meds[i].id===profEl.value){med=meds[i];break}}
+  var item={id:editId||uid(),pacienteId:id,proc:procNome,dente:document.getElementById('plano-dente').value,valor:parseFloat(document.getElementById('plano-valor').value)||0,status:document.getElementById('plano-status').value,profId:profEl.value,profNome:med?med.nome:'',previsao:document.getElementById('plano-previsao').value,obs:document.getElementById('plano-obs').value,createdAt:today()};
+  saveDoc('planos',item,function(e){
+    if(e){showNotif('Erro: '+e.message,'error');return}
+    _cache['planos']=null;closeModal('addPlano');
+    document.getElementById('plano-modal-title').textContent='Adicionar Procedimento';document.getElementById('plano-edit-id').value='';
+    ['plano-desc','plano-dente','plano-valor','plano-obs'].forEach(function(i){var el=document.getElementById(i);if(el)el.value=''});
+    document.getElementById('plano-proc').value='';document.getElementById('plano-status').value='pendente';
+    addLog(editId?'edit':'create',editId?'Plano editado':'Procedimento adicionado','Proc: '+procNome);showNotif(editId?'Atualizado!':'Adicionado!','success');renderPlano();
+  });
+}
+function editPlano(id){
+  getAll('planos',function(list){
+    var item=null;for(var i=0;i<list.length;i++){if(list[i].id===id){item=list[i];break}}if(!item)return;
+    document.getElementById('plano-modal-title').textContent='Editar Procedimento';document.getElementById('plano-edit-id').value=item.id;
+    document.getElementById('plano-desc').value=item.proc||'';document.getElementById('plano-dente').value=item.dente||'';document.getElementById('plano-valor').value=item.valor||'';document.getElementById('plano-status').value=item.status||'pendente';document.getElementById('plano-previsao').value=item.previsao||'';document.getElementById('plano-obs').value=item.obs||'';
+    openModal('addPlano');setTimeout(function(){document.getElementById('plano-prof').value=item.profId||''},50);
+  });
+}
+function deletePlano(id){if(!confirm('Remover?'))return;deleteDoc('planos',id,function(){_cache['planos']=null;addLog('delete','Procedimento removido','');showNotif('Removido','');renderPlano()})}
+function aprovarPlano(id){col('planos').doc(id).update({status:'aprovado'}).then(function(){_cache['planos']=null;addLog('edit','Procedimento aprovado',id);showNotif('Aprovado!','success');renderPlano()})}
+function concluirPlano(id){col('planos').doc(id).update({status:'concluido',concluidoEm:today()}).then(function(){_cache['planos']=null;addLog('edit','Procedimento concluído',id);showNotif('Concluído!','success');renderPlano()})}
+function renderPlano(){
+  var id=window._currentPacId;if(!id)return;var filter=document.getElementById('plano-filter-status').value;
+  getAll('planos',function(all){
+    var allPac=all.filter(function(p){return p.pacienteId===id});var list=allPac.filter(function(p){return!filter||p.status===filter});
+    var el=document.getElementById('plano-list');var ST={pendente:'badge-amber',aprovado:'badge-green',concluido:'badge-blue'};var STL={pendente:'Pendente',aprovado:'Aprovado',concluido:'Concluído'};
+    if(!list.length)el.innerHTML='<div class="empty-state"><i class="ti ti-clipboard-list"></i>Nenhum procedimento</div>';
+    else el.innerHTML=list.map(function(item){
+      return'<div class="plano-item '+item.status+'"><div class="plano-info"><div class="plano-proc">'+item.proc+(item.dente?' <span style="font-size:11px;color:#78909c">· Dente(s): '+item.dente+'</span>':'')+'</div><div class="plano-sub">'+(item.profNome?item.profNome+' · ':'')+(item.previsao?'Prev.: '+fmtDate(item.previsao)+' · ':'')+(item.obs||'')+'</div></div>'+
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div class="plano-val">'+fmtMoney(item.valor)+'</div><span class="badge '+ST[item.status]+'">'+STL[item.status]+'</span></div>'+
+        '<div style="display:flex;flex-direction:column;gap:4px;margin-left:8px">'+
+        (item.status==='pendente'?'<button class="btn btn-success btn-sm" onclick="aprovarPlano(\''+item.id+'\')" title="Aprovar"><i class="ti ti-check"></i></button>':'')+
+        (item.status==='aprovado'?'<button class="btn btn-primary btn-sm" onclick="concluirPlano(\''+item.id+'\')" title="Concluir"><i class="ti ti-flag"></i></button>':'')+
+        '<button class="btn btn-outline btn-sm" onclick="editPlano(\''+item.id+'\')"><i class="ti ti-edit"></i></button>'+
+        '<button class="btn btn-danger btn-sm" onclick="deletePlano(\''+item.id+'\')"><i class="ti ti-trash"></i></button></div></div>';
+    }).join('');
+    var tot=allPac.reduce(function(s,p){return s+Number(p.valor||0)},0);
+    var apr=allPac.filter(function(p){return p.status==='aprovado'}).reduce(function(s,p){return s+Number(p.valor||0)},0);
+    var con=allPac.filter(function(p){return p.status==='concluido'}).reduce(function(s,p){return s+Number(p.valor||0)},0);
+    var pen=allPac.filter(function(p){return p.status==='pendente'}).reduce(function(s,p){return s+Number(p.valor||0)},0);
+    document.getElementById('plano-totals').innerHTML='<span><b>Total:</b> '+fmtMoney(tot)+'</span><span style="color:#ff9800"><b>Pendente:</b> '+fmtMoney(pen)+'</span><span style="color:#2e7d32"><b>Aprovado:</b> '+fmtMoney(apr)+'</span><span style="color:#1565C0"><b>Concluído:</b> '+fmtMoney(con)+'</span>';
+  });
+}
+
+// ── ANIVERSARIANTES ───────────────────────────────────
+function renderAniversariantes(){
+  var pacs=getCache('pacientes').filter(function(p){return p.nasc});var now=new Date();var todayM=now.getMonth()+1,todayD=now.getDate();
+  var filterMes=parseInt((document.getElementById('aniv-filter-mes')||{}).value)||0;
+  function parseN(n){var p=n.split('-');return{mes:parseInt(p[1]),dia:parseInt(p[2]),ano:parseInt(p[0])}}
+  var hoje=pacs.filter(function(p){var n=parseN(p.nasc);return n.mes===todayM&&n.dia===todayD});
+  var semana=pacs.filter(function(p){var n=parseN(p.nasc);var bd=new Date(now.getFullYear(),n.mes-1,n.dia);if(bd<now)bd.setFullYear(now.getFullYear()+1);var diff=(bd-now)/(1000*60*60*24);return diff>=0&&diff<=7&&!(n.mes===todayM&&n.dia===todayD)});
+  var mesFiltrado=filterMes||todayM;
+  var doMes=pacs.filter(function(p){return parseN(p.nasc).mes===mesFiltrado}).sort(function(a,b){return parseN(a.nasc).dia-parseN(b.nasc).dia});
+  var MESES=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  document.getElementById('aniv-hoje').textContent=hoje.length;document.getElementById('aniv-semana').textContent=semana.length;
+  document.getElementById('aniv-mes').textContent=doMes.length;document.getElementById('aniv-mes-label').textContent=MESES[mesFiltrado]||'—';
+  document.getElementById('aniv-total').textContent=pacs.length;
+  function card(p,destaque){
+    var n=parseN(p.nasc);var idade=now.getFullYear()-n.ano-((now.getMonth()+1<n.mes||(now.getMonth()+1===n.mes&&now.getDate()<n.dia))?1:0);
+    return'<div class="aniv-item'+(destaque?' hoje':'')+'">'+
+      '<div class="patient-avatar" style="background:'+avatarColor(p.nome)+';width:36px;height:36px;font-size:12px;min-width:36px">'+initials(p.nome)+'</div>'+
+      '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+p.nome+(destaque?' 🎂':'')+'</div><div class="aniv-age">'+(p.tel?p.tel+' · ':'')+idade+' anos</div></div>'+
+      '<div class="aniv-date">'+String(n.dia).padStart(2,'0')+'/'+String(n.mes).padStart(2,'0')+'</div></div>';
+  }
+  document.getElementById('aniv-list-hoje').innerHTML=hoje.length?hoje.map(function(p){return card(p,true)}).join(''):'<div class="empty-state" style="padding:20px"><i class="ti ti-cake"></i>Nenhum hoje</div>';
+  document.getElementById('aniv-list-mes').innerHTML=doMes.length?doMes.map(function(p){var n=parseN(p.nasc);return card(p,n.mes===todayM&&n.dia===todayD)}).join(''):'<div class="empty-state" style="padding:20px"><i class="ti ti-calendar"></i>Nenhum em '+MESES[mesFiltrado]+'</div>';
+}
+
+// ── PROFISSIONAIS ─────────────────────────────────────
+function saveMedico(){
+  var id=document.getElementById('med-edit-id').value;var nome=document.getElementById('med-nome').value.trim();if(!nome){showNotif('Informe o nome','error');return}
+  var m={id:id||uid(),nome:nome,cro:document.getElementById('med-cro').value,esp:document.getElementById('med-esp').value,tel:document.getElementById('med-tel').value,email:document.getElementById('med-email').value,sala:document.getElementById('med-sala').value,cor:document.getElementById('med-cor').value,recNome:document.getElementById('med-rec-nome').value||nome,recEnd:document.getElementById('med-rec-end').value,recTel:document.getElementById('med-rec-tel').value,recObs:document.getElementById('med-rec-obs').value};
+  saveDoc('profissionais',m,function(e){if(e){showNotif('Erro: '+e.message,'error');return}closeModal('addMedico');clearMedForm();addLog(id?'edit':'create',id?'Profissional editado':'Cadastrado','Nome: '+nome);showNotif(id?'Atualizado!':'Cadastrado!','success');renderProfissionais()});
+}
+function clearMedForm(){document.getElementById('med-modal-title').textContent='Novo Profissional';document.getElementById('med-edit-id').value='';['med-nome','med-cro','med-tel','med-email','med-rec-nome','med-rec-end','med-rec-tel','med-rec-obs'].forEach(function(i){var el=document.getElementById(i);if(el)el.value=''});document.getElementById('med-cor').value='#1565C0'}
+function editMedico(id){
+  var arr=getCache('profissionais'),m=null;for(var i=0;i<arr.length;i++){if(arr[i].id===id){m=arr[i];break}}if(!m)return;
+  document.getElementById('med-modal-title').textContent='Editar Profissional';document.getElementById('med-edit-id').value=m.id;
+  document.getElementById('med-nome').value=m.nome||'';document.getElementById('med-cro').value=m.cro||'';document.getElementById('med-esp').value=m.esp||'Clínico Geral';document.getElementById('med-tel').value=m.tel||'';document.getElementById('med-email').value=m.email||'';document.getElementById('med-sala').value=m.sala||'Sala 1';document.getElementById('med-cor').value=m.cor||'#1565C0';document.getElementById('med-rec-nome').value=m.recNome||'';document.getElementById('med-rec-end').value=m.recEnd||'';document.getElementById('med-rec-tel').value=m.recTel||'';document.getElementById('med-rec-obs').value=m.recObs||'';
+  openModal('addMedico');
+}
+function deleteMedico(id){
+  if(!confirm('Excluir?'))return;
+  var arr=getCache('profissionais'),m=null;for(var i=0;i<arr.length;i++){if(arr[i].id===id){m=arr[i];break}}
+  deleteDoc('profissionais',id,function(e){if(e){showNotif('Erro: '+e.message,'error');return}addLog('delete','Profissional excluído',m?'Nome: '+m.nome:'');showNotif('Removido','');renderProfissionais()});
+}
+function renderProfissionais(){
+  var q=(document.getElementById('search-medico').value||'').toLowerCase();
+  var list=getCache('profissionais').filter(function(m){return!q||m.nome.toLowerCase().indexOf(q)>=0||(m.esp||'').toLowerCase().indexOf(q)>=0});
+  var el=document.getElementById('prof-list');
+  if(!list.length){el.innerHTML='<div class="empty-state" style="grid-column:span 2"><i class="ti ti-user-heart"></i>Nenhum profissional</div>';return}
+  el.innerHTML=list.map(function(m){
+    return'<div class="card" style="margin:0">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'+
+        '<div class="patient-avatar" style="background:'+(m.cor||'#1565C0')+';width:44px;height:44px;font-size:14px;min-width:44px">'+initials(m.nome)+'</div>'+
+        '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#1a237e">'+m.nome+'</div><div style="font-size:11px;color:#78909c">'+(m.esp||'—')+' · '+(m.cro||'—')+'</div></div>'+
+        '<div style="display:flex;gap:4px"><button class="btn btn-outline btn-sm" onclick="editMedico(\''+m.id+'\')"><i class="ti ti-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteMedico(\''+m.id+'\')"><i class="ti ti-trash"></i></button></div></div>'+
+      '<div style="background:#f5f9ff;border-radius:8px;padding:8px 12px;font-size:12px;border:1px solid #e3f2fd">'+
+        '<div style="font-weight:600;color:#1565C0;margin-bottom:3px"><i class="ti ti-file-text" style="margin-right:3px"></i>Receituário</div>'+
+        '<div>'+(m.recNome||m.nome)+'</div><div style="color:#78909c">'+[m.cro,m.recEnd].filter(Boolean).join(' · ')+'</div></div></div>';
+  }).join('');
+}
+
+// ── DOCUMENTOS / RECEITA / ATESTADO ──────────────────
+function openReceitaProntuario(){openModal('receita')}
+function updateReceitaPreview(){
+  var pacId=document.getElementById('rec-pac').value,medId=document.getElementById('rec-medico').value;
+  var pacs=getCache('pacientes'),pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===pacId){pac=pacs[i];break}}
+  var meds=getCache('profissionais'),med=null;for(var j=0;j<meds.length;j++){if(meds[j].id===medId){med=meds[j];break}}
+  var mN=med?(med.recNome||med.nome):'Consultório';var mS=med?[med.cro,med.recEnd,med.recTel?'Tel: '+med.recTel:''].filter(Boolean).join(' · '):'—';
+  document.getElementById('rec-header').innerHTML='<h2>'+mN+'</h2><p>'+(mS||'—')+'</p>'+(med&&med.recObs?'<p style="font-size:11px;color:#78909c">'+med.recObs+'</p>':'');
+  document.getElementById('rec-footer').textContent=mN+(med&&med.cro?' · '+med.cro:'')+' · _______________________________';
+  var mv=document.getElementById('rec-med').value||'...';var rv=document.getElementById('rec-rec').value;var dv=document.getElementById('rec-data').value;
+  document.getElementById('rec-preview').innerHTML='<div style="margin-bottom:8px"><strong>Paciente:</strong> '+(pac?pac.nome:'—')+' &nbsp;<strong>Data:</strong> '+fmtDate(dv)+'</div><div><strong>Rx:</strong><br>'+mv.replace(/\n/g,'<br>')+'</div>'+(rv?'<div style="margin-top:8px"><strong>Recomendações:</strong><br>'+rv.replace(/\n/g,'<br>')+'</div>':'');
+}
+function saveReceita(){
+  var pacId=document.getElementById('rec-pac').value,medId=document.getElementById('rec-medico').value,mv=document.getElementById('rec-med').value.trim();
+  if(!pacId){showNotif('Selecione o paciente','error');return}if(!medId){showNotif('Selecione o profissional','error');return}if(!mv){showNotif('Informe o medicamento','error');return}
+  var pacs=getCache('pacientes'),pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===pacId){pac=pacs[i];break}}
+  var meds=getCache('profissionais'),med=null;for(var j=0;j<meds.length;j++){if(meds[j].id===medId){med=meds[j];break}}
+  var entry={id:uid(),tipo:'Receita',pacienteId:pacId,pacienteNome:pac?pac.nome:'',medicoId:medId,medicoNome:med?med.nome:'',data:document.getElementById('rec-data').value,conteudo:mv,rec:document.getElementById('rec-rec').value};
+  saveDoc('documentos',entry,function(e){if(e){showNotif('Erro: '+e.message,'error');return}_cache['documentos']=null;closeModal('receita');addLog('create','Receita emitida','Paciente: '+(pac?pac.nome:''));showNotif('Receita salva!','success');renderDocumentos()});
+}
+function saveAtestado(){
+  var pacId=document.getElementById('ates-pac').value;if(!pacId){showNotif('Selecione o paciente','error');return}
+  var pacs=getCache('pacientes'),pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===pacId){pac=pacs[i];break}}
+  var medEl=document.getElementById('ates-medico');var meds=getCache('profissionais'),med=null;for(var j=0;j<meds.length;j++){if(meds[j].id===medEl.value){med=meds[j];break}}
+  var entry={id:uid(),tipo:'Atestado',pacienteId:pacId,pacienteNome:pac?pac.nome:'',medicoNome:med?med.nome:'',data:document.getElementById('ates-data').value,horas:document.getElementById('ates-horas').value,cid:document.getElementById('ates-cid').value,obs:document.getElementById('ates-obs').value};
+  saveDoc('documentos',entry,function(e){if(e){showNotif('Erro: '+e.message,'error');return}_cache['documentos']=null;closeModal('atestado');addLog('create','Atestado emitido','Paciente: '+(pac?pac.nome:''));showNotif('Atestado emitido!','success');renderDocumentos()});
+}
+function renderDocumentos(){
+  getAll('documentos',function(list){
+    list=list.slice().sort(function(a,b){return(b.data||'').localeCompare(a.data||'')});
+    var el=document.getElementById('docs-list');if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-file-off"></i>Nenhum documento</div>';return}
+    var TB={Receita:'badge-blue',Atestado:'badge-green'};
+    el.innerHTML='<table><thead><tr><th>Tipo</th><th>Paciente</th><th>Profissional</th><th>Data</th><th></th></tr></thead><tbody>'+
+      list.map(function(d){return'<tr><td><span class="badge '+(TB[d.tipo]||'badge-gray')+'">'+d.tipo+'</span></td><td>'+d.pacienteNome+'</td><td>'+(d.medicoNome||'—')+'</td><td>'+fmtDate(d.data)+'</td><td><button class="btn btn-danger btn-sm" onclick="deleteDocumento(\''+d.id+'\')"><i class="ti ti-trash"></i></button></td></tr>'}).join('')+'</tbody></table>';
+  });
+}
+function deleteDocumento(id){if(!confirm('Excluir?'))return;deleteDoc('documentos',id,function(){_cache['documentos']=null;addLog('delete','Documento excluído','');renderDocumentos();showNotif('Removido','')})}
+
+// ── EXAMES ────────────────────────────────────────────
+function saveExame(){
+  var pacId=document.getElementById('exam-pac').value,arq=document.getElementById('exam-arquivo').value.trim();if(!pacId||!arq){showNotif('Preencha paciente e arquivo','error');return}
+  var pacs=getCache('pacientes'),pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===pacId){pac=pacs[i];break}}
+  var entry={id:uid(),pacienteId:pacId,pacienteNome:pac?pac.nome:'',tipo:document.getElementById('exam-tipo').value,data:document.getElementById('exam-data').value,arquivo:arq,tamanho:document.getElementById('exam-tamanho').value,obs:document.getElementById('exam-obs').value};
+  saveDoc('exames',entry,function(e){if(e){showNotif('Erro: '+e.message,'error');return}_cache['exames']=null;closeModal('addExame');addLog('create','Exame cadastrado','Paciente: '+(pac?pac.nome:''));showNotif('Cadastrado!','success');renderExames()});
+}
+function deleteExame(id){if(!confirm('Remover?'))return;deleteDoc('exames',id,function(){_cache['exames']=null;addLog('delete','Exame removido','');renderExames();showNotif('Removido','')})}
+function renderExames(){
+  var q=(document.getElementById('search-exame').value||'').toLowerCase();var tipo=document.getElementById('filter-exame-tipo').value;
+  getAll('exames',function(all){
+    var list=all.filter(function(e){return(!q||(e.pacienteNome||'').toLowerCase().indexOf(q)>=0||(e.arquivo||'').toLowerCase().indexOf(q)>=0)&&(!tipo||e.tipo===tipo)}).sort(function(a,b){return(b.data||'').localeCompare(a.data||'')});
+    var el=document.getElementById('exames-list');if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-microscope"></i>Nenhum exame</div>';return}
+    el.innerHTML='<table><thead><tr><th>Paciente</th><th>Tipo</th><th>Data</th><th>Arquivo</th><th>Tam.</th><th></th></tr></thead><tbody>'+
+      list.map(function(e){return'<tr><td>'+e.pacienteNome+'</td><td><span class="badge badge-blue">'+e.tipo+'</span></td><td>'+fmtDate(e.data)+'</td><td>'+e.arquivo+'</td><td>'+(e.tamanho||'—')+'</td><td><button class="btn btn-danger btn-sm" onclick="deleteExame(\''+e.id+'\')"><i class="ti ti-trash"></i></button></td></tr>'}).join('')+'</tbody></table>';
+  });
+}
+
+// ── AGENDA ────────────────────────────────────────────
+var calDate=new Date(),selDate=today(),agendaView='dia';
+function calNav(dir){calDate=new Date(calDate.getFullYear(),calDate.getMonth()+dir,1);renderCal()}
+function renderCal(){
+  var y=calDate.getFullYear(),m=calDate.getMonth();
+  var MN=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  document.getElementById('cal-label').textContent=MN[m]+' '+y;
+  var appts=getCache('agendamentos');var prefix=y+'-'+String(m+1).padStart(2,'0');
+  var dwa={};appts.filter(function(a){return(a.data||'').slice(0,7)===prefix}).forEach(function(a){dwa[parseInt(a.data.split('-')[2])]=1});
+  var fd=new Date(y,m,1).getDay(),dim=new Date(y,m+1,0).getDate();var tn=new Date();
+  var html='<div class="cal-day-name">D</div><div class="cal-day-name">S</div><div class="cal-day-name">T</div><div class="cal-day-name">Q</div><div class="cal-day-name">Q</div><div class="cal-day-name">S</div><div class="cal-day-name">S</div>';
+  for(var i=0;i<fd;i++)html+='<div class="cal-day empty"></div>';
+  for(var d=1;d<=dim;d++){
+    var ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var isT=tn.getFullYear()===y&&tn.getMonth()===m&&tn.getDate()===d;var isS=selDate===ds&&!isT;
+    html+='<div class="'+['cal-day',isT?'today':'',isS?'selected':'',dwa[d]?'has-appt':''].filter(Boolean).join(' ')+'" onclick="selectCalDay(\''+ds+'\')">'+d+'</div>';
+  }
+  document.getElementById('cal-grid').innerHTML=html;
+}
+function selectCalDay(d){selDate=d;agendaView='dia';setAgendaView('dia',false);renderCal();var p=d.split('-');document.getElementById('agenda-date-label').textContent=parseInt(p[2])+'/'+parseInt(p[1])+'/'+p[0]}
+function setAgendaView(view,doRender){
+  if(doRender===undefined)doRender=true;agendaView=view;
+  var bD=document.getElementById('btn-view-dia'),bS=document.getElementById('btn-view-semana');
+  var wrap=document.getElementById('agenda-table-wrap'),wrapW=document.getElementById('agenda-week-wrap');
+  if(view==='dia'){if(bD){bD.style.background='#1565C0';bD.style.color='#fff';bD.className='btn btn-sm'}if(bS){bS.className='btn btn-outline btn-sm';bS.style.background='';bS.style.color=''}if(wrap)wrap.style.display='block';if(wrapW)wrapW.style.display='none';var fs=document.getElementById('filter-status');if(fs)fs.style.display='';if(doRender)renderAgenda()}
+  else{if(bS){bS.style.background='#1565C0';bS.style.color='#fff';bS.className='btn btn-sm'}if(bD){bD.className='btn btn-outline btn-sm';bD.style.background='';bD.style.color=''}if(wrap)wrap.style.display='none';if(wrapW)wrapW.style.display='block';var fs2=document.getElementById('filter-status');if(fs2)fs2.style.display='none';if(doRender)renderWeek()}
+}
+function renderAgendaView(){if(agendaView==='semana')renderWeek();else renderAgenda()}
+function renderAgenda(){
+  var profId=(document.getElementById('filter-prof')||{}).value||'';var status=(document.getElementById('filter-status')||{}).value||'';
+  var pacs=getCache('pacientes'),meds=getCache('profissionais');
+  var list=getCache('agendamentos').filter(function(a){return a.data===selDate&&(!profId||a.profId===profId)&&(!status||a.status===status)}).sort(function(a,b){return(a.hora||'').localeCompare(b.hora||'')});
+  var wrap=document.getElementById('agenda-table-wrap');
+  if(!list.length){wrap.innerHTML='<div class="empty-state"><i class="ti ti-calendar-off"></i>Nenhuma consulta</div>';return}
+  wrap.innerHTML='<div class="table-wrap"><table><thead><tr><th>Hora</th><th>Paciente</th><th>Prof.</th><th>Proc.</th><th>Sala</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>'+
+    list.map(function(a){
+      var pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===a.pacienteId){pac=pacs[i];break}}
+      var med=null;for(var j=0;j<meds.length;j++){if(meds[j].id===a.profId){med=meds[j];break}}
+      return'<tr><td><b>'+a.hora+'</b></td><td>'+(pac?pac.nome:a.pacienteNome||'—')+'</td><td>'+(med?med.nome:a.profNome||'—')+'</td><td>'+a.proc+'</td><td>'+a.sala+'</td><td>'+(a.valor?fmtMoney(a.valor):'—')+'</td><td><span class="badge '+(SB[a.status]||'badge-gray')+'">'+a.status+'</span></td><td style="display:flex;gap:4px"><button class="btn btn-outline btn-sm" onclick="editAppt(\''+a.id+'\')"><i class="ti ti-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteAppt(\''+a.id+'\')"><i class="ti ti-trash"></i></button></td></tr>';
+    }).join('')+'</tbody></table></div>';
+  renderCheckin();
+}
+function getWeekDates(ref){var d=new Date(ref+'T00:00:00');var dow=d.getDay();var dates=[];for(var i=0;i<7;i++){var dd=new Date(d);dd.setDate(d.getDate()-dow+i);dates.push(dd.toISOString().split('T')[0])}return dates}
+function renderWeek(){
+  var profId=(document.getElementById('filter-prof')||{}).value||'';var meds=getCache('profissionais'),pacs=getCache('pacientes'),appts=getCache('agendamentos');
+  var dates=getWeekDates(selDate),td=today();
+  var DAYS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'],MONTHS=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var profList=profId?meds.filter(function(m){return m.id===profId}):meds;var cols=profList.length>0?profList:[{id:'',nome:'Sem profissional'}];
+  var wrap=document.getElementById('agenda-week-wrap');var minW=Math.max(700,dates.length*cols.length*90+80);
+  var html='<div style="min-width:'+minW+'px"><div style="display:flex;border-bottom:2px solid #e0e0e0"><div style="width:52px;flex-shrink:0;border-right:1px solid #e0e0e0;background:#f8faff"></div>';
+  dates.forEach(function(d){var isT=d===td;var parts=d.split('-');var dow=new Date(d+'T00:00:00').getDay();html+='<div style="flex:1;text-align:center;padding:6px 4px;font-size:11px;font-weight:700;border-right:1px solid #e0e0e0;background:'+(isT?'#e3f2fd':'#f8faff')+';color:'+(isT?'#1565C0':'#546e7a')+'">'+DAYS[dow]+'<br><span style="font-size:13px;font-weight:800">'+parseInt(parts[2])+'</span> '+MONTHS[parseInt(parts[1])-1]+'</div>'});
+  html+='</div>';
+  cols.forEach(function(prof){
+    html+='<div style="display:flex;border-bottom:1px solid #f0f0f0;background:#f5f9ff"><div style="width:52px;flex-shrink:0;border-right:1px solid #e0e0e0;display:flex;align-items:center;justify-content:center;padding:4px"><div style="width:28px;height:28px;border-radius:50%;background:'+(prof.cor||avatarColor(prof.nome))+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">'+initials(prof.nome)+'</div></div>';
+    dates.forEach(function(d){
+      var isT=d===td;var dayAppts=appts.filter(function(a){return a.data===d&&a.profId===prof.id}).sort(function(a,b){return(a.hora||'').localeCompare(b.hora||'')});
+      html+='<div style="flex:1;border-right:1px solid #e0e0e0;padding:4px;min-height:90px;background:'+(isT?'#fafeff':'#fff')+'">';
+      if(!dayAppts.length)html+='<div class="week-empty">—</div>';
+      else dayAppts.forEach(function(a){
+        var pac=null;for(var k=0;k<pacs.length;k++){if(pacs[k].id===a.pacienteId){pac=pacs[k];break}}
+        var stMap={Confirmado:'#e3f2fd|#1565C0',Presente:'#e8f5e9|#2e7d32',Chegou:'#e8f5e9|#2e7d32',Aguardando:'#fff3e0|#e65100',Faltou:'#ffebee|#c62828',Agendado:'#eceff1|#546e7a'};
+        var sp=(stMap[a.status]||'#eceff1|#546e7a').split('|');
+        html+='<div class="week-appt" style="background:'+sp[0]+';border-left-color:'+sp[1]+'" onclick="editAppt(\''+a.id+'\')"><div class="week-appt-name" style="color:'+sp[1]+'">'+a.hora+' '+(pac?pac.nome:a.pacienteNome||'—')+'</div><div class="week-appt-info">'+a.proc+'</div></div>';
+      });
+      html+='</div>';
+    });
+    html+='</div>';
+  });
+  html+='</div>';wrap.innerHTML=html;
+  var d0=dates[0],d6=dates[6];var p0=d0.split('-'),p6=d6.split('-');var MO=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  document.getElementById('agenda-date-label').textContent=parseInt(p0[2])+' '+MO[parseInt(p0[1])-1]+' — '+parseInt(p6[2])+' '+MO[parseInt(p6[1])-1]+' '+p0[0];
+}
+var checkinVisible=false;
+function toggleCheckin(){checkinVisible=!checkinVisible;document.getElementById('checkin-panel').style.display=checkinVisible?'block':'none';if(checkinVisible)renderCheckin()}
+function renderCheckin(){
+  if(!checkinVisible)return;var pacs=getCache('pacientes');
+  var list=getCache('agendamentos').filter(function(a){return a.data===selDate&&(a.status==='Agendado'||a.status==='Confirmado'||a.status==='Aguardando')}).sort(function(a,b){return(a.hora||'').localeCompare(b.hora||'')});
+  var el=document.getElementById('checkin-list');
+  if(!list.length){el.innerHTML='<div style="font-size:12px;color:#15803d;opacity:.7">Nenhuma consulta pendente hoje.</div>';return}
+  el.innerHTML=list.map(function(a){
+    var pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===a.pacienteId){pac=pacs[i];break}}var nome=pac?pac.nome:a.pacienteNome||'—';
+    return'<div class="checkin-item">'+
+      '<div class="patient-avatar" style="background:'+avatarColor(nome)+';width:30px;height:30px;font-size:10px;min-width:30px">'+initials(nome)+'</div>'+
+      '<div style="flex:1;min-width:0"><div class="checkin-name">'+nome+'</div><div style="font-size:11px;color:#78909c">'+a.hora+' · '+a.proc+'</div></div>'+
+      '<div style="display:flex;gap:4px">'+
+        '<button class="status-btn sb-presente" onclick="quickStatus(\''+a.id+'\',\'Presente\')"><i class="ti ti-check"></i> Presente</button>'+
+        '<button class="status-btn sb-aguardando" onclick="quickStatus(\''+a.id+'\',\'Aguardando\')"><i class="ti ti-clock"></i></button>'+
+        '<button class="status-btn sb-faltou" onclick="quickStatus(\''+a.id+'\',\'Faltou\')"><i class="ti ti-x"></i></button>'+
+      '</div></div>';
+  }).join('');
+}
+function quickStatus(id,status){
+  col('agendamentos').doc(id).update({status:status}).then(function(){
+    if(_cache['agendamentos']){var arr=_cache['agendamentos'];for(var i=0;i<arr.length;i++){if(arr[i].id===id){arr[i].status=status;break}}}
+    addLog('edit','Status atualizado para "'+status+'"','');showNotif('Status: '+status,'success');
+    renderCheckin();if(agendaView==='dia')renderAgenda();else renderWeek();renderDashboard();
+  });
+}
+function saveAppt(){
+  var editId=document.getElementById('appt-edit-id').value;var pacId=document.getElementById('appt-paciente').value,data=document.getElementById('appt-data').value,hora=document.getElementById('appt-hora').value;
+  if(!pacId||!data||!hora){showNotif('Preencha paciente, data e horário','error');return}
+  var pacs=getCache('pacientes'),pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===pacId){pac=pacs[i];break}}
+  var profEl=document.getElementById('appt-prof');var meds=getCache('profissionais'),med=null;for(var j=0;j<meds.length;j++){if(meds[j].id===profEl.value){med=meds[j];break}}
+  var appt={id:editId||uid(),pacienteId:pacId,pacienteNome:pac?pac.nome:'',profId:profEl.value,profNome:med?med.nome:'',data:data,hora:hora,proc:document.getElementById('appt-proc').value,sala:document.getElementById('appt-sala').value,status:document.getElementById('appt-status').value,valor:document.getElementById('appt-valor').value,obs:document.getElementById('appt-obs').value};
+  saveDoc('agendamentos',appt,function(e){
+    if(e){showNotif('Erro: '+e.message,'error');return}
+    document.getElementById('appt-edit-id').value='';document.getElementById('appt-modal-title').textContent='Novo Agendamento';
+    closeModal('addAppt');addLog(editId?'edit':'create',editId?'Consulta editada':'Consulta agendada',(pac?pac.nome:'')+' · '+data+' '+hora);
+    showNotif(editId?'Atualizado!':'Agendado!','success');selDate=data;renderCal();renderAgenda();renderDashboard();
+  });
+}
+function editAppt(id){
+  var a=null;var list=getCache('agendamentos');for(var i=0;i<list.length;i++){if(list[i].id===id){a=list[i];break}}if(!a)return;
+  document.getElementById('appt-modal-title').textContent='Editar';document.getElementById('appt-edit-id').value=a.id;
+  openModal('addAppt');
+  setTimeout(function(){
+    document.getElementById('appt-paciente').value=a.pacienteId||'';document.getElementById('appt-prof').value=a.profId||'';
+    document.getElementById('appt-data').value=a.data||'';document.getElementById('appt-hora').value=a.hora||'';
+    document.getElementById('appt-proc').value=a.proc||'Avaliação';document.getElementById('appt-sala').value=a.sala||'Sala 1';
+    document.getElementById('appt-status').value=a.status||'Agendado';document.getElementById('appt-valor').value=a.valor||'';document.getElementById('appt-obs').value=a.obs||'';
+  },60);
+}
+function deleteAppt(id){if(!confirm('Excluir?'))return;deleteDoc('agendamentos',id,function(){addLog('delete','Consulta excluída','');showNotif('Removido','');renderAgenda();renderDashboard();renderCal()})}
+
+// ── TAREFAS ───────────────────────────────────────────
+function saveTask(){
+  var desc=document.getElementById('task-desc').value.trim();if(!desc){showNotif('Informe a descrição','error');return}
+  var entry={id:uid(),desc:desc,pri:document.getElementById('task-pri').value,date:document.getElementById('task-date').value,pacId:document.getElementById('task-pac').value,done:false};
+  saveDoc('tarefas',entry,function(e){if(e){showNotif('Erro: '+e.message,'error');return}document.getElementById('task-desc').value='';closeModal('addTask');addLog('create','Tarefa criada',desc);showNotif('Tarefa criada!','success');renderTarefas();renderDashboard()});
+}
+function toggleTask(id){
+  var arr=getCache('tarefas'),t=null;for(var i=0;i<arr.length;i++){if(arr[i].id===id){t=arr[i];break}}if(!t)return;
+  var nd=!t.done;
+  col('tarefas').doc(id).update({done:nd}).then(function(){if(_cache['tarefas']){var arr2=_cache['tarefas'];for(var i=0;i<arr2.length;i++){if(arr2[i].id===id){arr2[i].done=nd;break}}}addLog('edit',nd?'Tarefa concluída':'Tarefa reaberta',t.desc);renderTarefas();renderDashboard()});
+}
+function deleteTask(id){deleteDoc('tarefas',id,function(){addLog('delete','Tarefa excluída','');renderTarefas();renderDashboard()})}
+function renderTarefas(){
+  var pri=(document.getElementById('filter-task-pri')||{}).value||'';var all=getCache('tarefas').filter(function(t){return!pri||t.pri===pri});
+  var PC={Alta:'p-high',Média:'p-med',Baixa:'p-low'};
+  var mk=function(t){return'<div class="task-item'+(t.done?' done':'')+'"><div class="priority '+(PC[t.pri]||'p-low')+'"></div><div class="task-check'+(t.done?' checked':'')+'" onclick="toggleTask(\''+t.id+'\')">'+(t.done?'<i class="ti ti-check" style="font-size:11px"></i>':'')+'</div><div class="task-text">'+t.desc+'</div>'+(t.date?'<div class="task-date">'+fmtDate(t.date)+'</div>':'')+'<button class="btn btn-danger btn-sm" onclick="deleteTask(\''+t.id+'\')"><i class="ti ti-trash"></i></button></div>'};
+  var pend=all.filter(function(t){return!t.done}),done=all.filter(function(t){return t.done});
+  document.getElementById('tasks-pending').innerHTML=pend.length?pend.map(mk).join(''):'<div class="empty-state"><i class="ti ti-circle-check"></i>Nenhuma pendente</div>';
+  document.getElementById('tasks-done').innerHTML=done.length?done.map(mk).join(''):'<div class="empty-state" style="padding:20px"><i class="ti ti-checkbox"></i>Nenhuma concluída</div>';
+}
+
+// ── FINANCEIRO ────────────────────────────────────────
+function saveFinanceiro(){
+  var val=parseFloat(document.getElementById('fin-valor').value),desc=document.getElementById('fin-desc').value.trim(),data=document.getElementById('fin-data').value;
+  if(!val||!desc||!data){showNotif('Preencha valor, descrição e data','error');return}
+  var pacId=document.getElementById('fin-pac').value;var pacs=getCache('pacientes'),pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===pacId){pac=pacs[i];break}}
+  var entry={id:uid(),tipo:document.getElementById('fin-tipo').value,val:val,desc:desc,cat:document.getElementById('fin-cat').value,data:data,status:document.getElementById('fin-status').value,pacId:pacId,pacNome:pac?pac.nome:''};
+  saveDoc('financeiro',entry,function(e){if(e){showNotif('Erro: '+e.message,'error');return}closeModal('addFinanceiro');addLog('create','Movimentação registrada',desc+' — '+fmtMoney(val));showNotif('Salvo!','success');renderFinanceiro();renderDashboard()});
+}
+function deleteFinanceiro(id){deleteDoc('financeiro',id,function(){addLog('delete','Movimentação excluída','');renderFinanceiro();renderDashboard()})}
+function renderFinanceiro(){
+  var mes=new Date().toISOString().slice(0,7),list=getCache('financeiro');
+  var deste=list.filter(function(f){return(f.data||'').slice(0,7)===mes});
+  var rec=deste.filter(function(f){return f.tipo==='entrada'&&f.status==='pago'}).reduce(function(s,f){return s+Number(f.val)},0);
+  var desp=deste.filter(function(f){return f.tipo==='saida'&&f.status==='pago'}).reduce(function(s,f){return s+Number(f.val)},0);
+  var receb=list.filter(function(f){return f.tipo==='entrada'&&f.status==='pendente'}).reduce(function(s,f){return s+Number(f.val)},0);
+  document.getElementById('fin-receita').textContent=fmtMoney(rec);document.getElementById('fin-despesas').textContent=fmtMoney(desp);document.getElementById('fin-lucro').textContent=fmtMoney(rec-desp);document.getElementById('fin-receber').textContent=fmtMoney(receb);
+  var sorted=list.slice().sort(function(a,b){return(b.data||'').localeCompare(a.data||'')}).slice(0,20);
+  var fl=document.getElementById('fin-list');
+  fl.innerHTML=sorted.length?sorted.map(function(f){
+    return'<div class="finance-row"><div class="fin-icon '+(f.tipo==='entrada'?'in':'out')+'"><i class="ti ti-arrow-'+(f.tipo==='entrada'?'down':'up')+'-right"></i></div><div class="fin-desc"><div class="fin-name">'+f.desc+'</div><div class="fin-cat">'+f.cat+(f.pacNome?' · '+f.pacNome:'')+' · '+fmtDate(f.data)+'</div></div><div class="fin-val '+(f.tipo==='entrada'?'in':'out')+'">'+(f.tipo==='entrada'?'+':'-')+fmtMoney(f.val)+'</div><button class="btn btn-danger btn-sm" style="margin-left:6px" onclick="deleteFinanceiro(\''+f.id+'\')"><i class="ti ti-trash"></i></button></div>';
+  }).join(''):'<div class="empty-state"><i class="ti ti-currency-dollar"></i>Nenhuma movimentação</div>';
+  var cats={};list.filter(function(f){return f.tipo==='entrada'&&f.status==='pago'}).forEach(function(f){cats[f.cat]=(cats[f.cat]||0)+Number(f.val)});
+  var total=Object.values(cats).reduce(function(s,v){return s+v},0)||1;
+  var cols2=['#4caf50','#2196f3','#9c27b0','#ff9800','#f44336'];var ci=0;
+  document.getElementById('fin-categorias').innerHTML=Object.entries(cats).sort(function(a,b){return b[1]-a[1]}).map(function(e){var pct=Math.round(e[1]/total*100);var col=cols2[ci++%cols2.length];return'<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span>'+e[0]+'</span><span style="font-weight:600">'+fmtMoney(e[1])+'</span></div><div class="stock-bar"><div class="stock-fill" style="width:'+pct+'%;background:'+col+'"></div></div></div>'}).join('')||'<div class="empty-state" style="padding:20px"><i class="ti ti-chart-bar"></i>Sem dados</div>';
+}
+
+// ── CONTAS ────────────────────────────────────────────
+function getContaStatus(c){if(c.status==='pago')return'pago';if((c.vencimento||'')<today())return'vencido';return'pendente'}
+function saveConta(){
+  var id=document.getElementById('conta-edit-id').value;var desc=document.getElementById('conta-desc').value.trim();var val=parseFloat(document.getElementById('conta-valor').value);var venc=document.getElementById('conta-vencimento').value;
+  if(!desc||!val||!venc){showNotif('Preencha descrição, valor e vencimento','error');return}
+  var pacId=document.getElementById('conta-pac').value;var pacs=getCache('pacientes'),pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===pacId){pac=pacs[i];break}}
+  var c={id:id||uid(),tipo:document.getElementById('conta-tipo').value,desc:desc,val:val,vencimento:venc,cat:document.getElementById('conta-cat').value,status:document.getElementById('conta-status').value,pacId:pacId,pacNome:pac?pac.nome:'',obs:document.getElementById('conta-obs').value,createdAt:today()};
+  saveDoc('contas',c,function(e){if(e){showNotif('Erro: '+e.message,'error');return}closeModal('addConta');document.getElementById('conta-modal-title').textContent='Nova Conta';document.getElementById('conta-edit-id').value='';addLog(id?'edit':'create','Conta criada/editada',desc+' — '+fmtMoney(val));showNotif(id?'Atualizado!':'Conta salva!','success');renderContas()});
+}
+function editConta(id){
+  getAll('contas',function(list){
+    var c=null;for(var i=0;i<list.length;i++){if(list[i].id===id){c=list[i];break}}if(!c)return;
+    document.getElementById('conta-modal-title').textContent='Editar Conta';document.getElementById('conta-edit-id').value=c.id;
+    document.getElementById('conta-tipo').value=c.tipo||'receber';document.getElementById('conta-valor').value=c.val||'';document.getElementById('conta-desc').value=c.desc||'';document.getElementById('conta-vencimento').value=c.vencimento||'';document
