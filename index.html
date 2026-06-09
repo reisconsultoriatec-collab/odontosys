@@ -989,26 +989,21 @@ textarea{resize:vertical;min-height:76px}
 // ═══════════════════════════════════════════════════
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyCoA1vvziQRIflAqfpatQD6lnYbTxiXW6o",
-  authDomain: "sistema-powerbi.firebaseapp.com",
-  projectId: "sistema-powerbi",
-  storageBucket: "sistema-powerbi.firebasestorage.app",
-  messagingSenderId: "404615520187",
-  appId: "1:404615520187:web:89f810e0fd15fcf853ee9e",
-  measurementId: "G-J3ZVVCYDP3"
+  apiKey: "AIzaSyBn-qlzTKU0SAazPAe_ytFDXXJcf9nEozY",
+  authDomain: "odontosystem-72f63.firebaseapp.com",
+  projectId: "odontosystem-72f63",
+  storageBucket: "odontosystem-72f63.firebasestorage.app",
+  messagingSenderId: "534133981248",
+  appId: "1:534133981248:web:f9ea910816a13212f05fa5"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-
 // ═══════════════════════════════════════════════════
 
 var _auth, _db;
@@ -2688,3 +2683,22 @@ var renders={
   perfis:    renderPerfis,
   logs:      renderLogs
 };
+// ══ INIT ════════════════════════════════════════
+function initApp(){
+  selDate=today();
+  var p=today().split('-');
+  document.getElementById('agenda-date-label').textContent=parseInt(p[2])+'/'+parseInt(p[1])+'/'+p[0];
+  buildOdontograma();renderCal();renderDashboard();
+}
+
+// ══ BOOT ════════════════════════════════════════
+initDefaults();
+var sess=DB.getObj('session',{});
+if(sess&&sess.userId){
+  var usuarios=DB.get('usuarios');var u=null;
+  for(var i=0;i<usuarios.length;i++){if(usuarios[i].id===sess.userId&&usuarios[i].status==='ativo'){u=usuarios[i];break}}
+  if(u){currentUser=u;document.getElementById('login-screen').style.display='none';document.getElementById('app').style.display='block';applyPermissions();initApp()}
+}
+</script>
+</body>
+</html>
