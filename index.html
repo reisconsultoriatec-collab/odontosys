@@ -2475,6 +2475,57 @@ function deleteUsuario(id){
   renderUsuarios();
 }
 
+// — Limpar formulários ao fechar modais de edição —
+var _prevCloseModal2=closeModal;
+closeModal=function(id){
+  _prevCloseModal2(id);
+  if(id==='addConsultorio'){
+    document.getElementById('clt-edit-id').value='';
+    document.getElementById('clt-modal-title').textContent='Novo Consultório';
+    ['clt-nome','clt-cnpj','clt-resp','clt-end','clt-tel','clt-email'].forEach(function(f){var el=document.getElementById(f);if(el)el.value=''});
+  }
+  if(id==='addMedico'){
+    document.getElementById('med-edit-id').value='';
+    document.getElementById('med-modal-title').textContent='Novo Profissional';
+    ['med-nome','med-cro','med-tel','med-email','med-rec-nome','med-rec-end','med-rec-tel','med-rec-obs'].forEach(function(f){var el=document.getElementById(f);if(el)el.value=''});
+    document.getElementById('med-cor').value='#1565C0';
+  }
+  if(id==='addEstoque'){
+    document.getElementById('est-edit-id').value='';
+    document.getElementById('est-modal-title').textContent='Cadastrar Item';
+    ['est-nome','est-qtd','est-min','est-valid','est-forn'].forEach(function(f){var el=document.getElementById(f);if(el)el.value=''});
+  }
+  if(id==='addConta'){
+    document.getElementById('conta-edit-id').value='';
+    document.getElementById('conta-modal-title').textContent='Nova Conta';
+    ['conta-desc','conta-valor','conta-vencimento','conta-obs'].forEach(function(f){var el=document.getElementById(f);if(el)el.value=''});
+  }
+  if(id==='addAppt'){
+    document.getElementById('appt-edit-id').value='';
+    document.getElementById('appt-modal-title').textContent='Novo Agendamento';
+    ['appt-valor','appt-obs'].forEach(function(f){var el=document.getElementById(f);if(el)el.value=''});
+    var cw=document.getElementById('conflict-warn');if(cw)cw.classList.remove('show');
+  }
+  if(id==='addPaciente'){
+    document.getElementById('pac-edit-id').value='';
+    document.getElementById('pac-modal-title').textContent='Cadastrar Paciente';
+    ['pac-nome','pac-cpf','pac-tel','pac-email','pac-alergias','pac-obs'].forEach(function(f){var el=document.getElementById(f);if(el)el.value=''});
+    ['cat-ortod','cat-implan','cat-urg','cat-inf','cat-idoso'].forEach(function(c){var el=document.getElementById(c);if(el)el.checked=false});
+  }
+  if(id==='addPlano'){
+    document.getElementById('plano-edit-id').value='';
+    document.getElementById('plano-modal-title').textContent='Adicionar Procedimento';
+    ['plano-desc','plano-dente','plano-valor','plano-obs'].forEach(function(f){var el=document.getElementById(f);if(el)el.value=''});
+    var pp=document.getElementById('plano-proc');if(pp)pp.value='';
+    var ps=document.getElementById('plano-status');if(ps)ps.value='pendente';
+  }
+  if(id==='addUsuario'){
+    document.getElementById('usr-edit-id').value='';
+    var cEl=document.getElementById('usr-consultorio');if(cEl)cEl.disabled=false;
+    var aEl=document.getElementById('usr-aprovado');if(aEl)aEl.disabled=false;
+  }
+};
+
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
   if(authUser){setLoginLoading(true);enterApp(authUser)}
