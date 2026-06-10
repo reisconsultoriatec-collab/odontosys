@@ -355,6 +355,18 @@ textarea{resize:vertical;min-height:76px}
 .parc-item:last-child{border:none}
 .parc-item-n{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
 .parc-item-n.paid{background:#e8f5e9;color:#2e7d32}.parc-item-n.pending{background:#fff3e0;color:#e65100}.parc-item-n.overdue{background:#ffebee;color:#c62828}
+/* ══ TIMEOUT INATIVIDADE ══ */
+.timeout-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:800;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.timeout-overlay.show{display:flex}
+.timeout-box{background:#fff;border-radius:20px;padding:36px;text-align:center;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:slideIn .3s ease}
+.timeout-icon{font-size:52px;color:#ff9800;margin-bottom:14px}
+.timeout-title{font-size:17px;font-weight:700;color:#1a237e;margin-bottom:8px}
+.timeout-msg{font-size:13px;color:#78909c;line-height:1.7;margin-bottom:18px}
+.timeout-countdown{font-size:36px;font-weight:800;color:#c62828;margin-bottom:18px;font-family:monospace;letter-spacing:2px}
+.timeout-bar{height:4px;border-radius:2px;background:#eceff1;overflow:hidden;margin-bottom:18px}
+.timeout-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#f44336,#ff9800);transition:width 1s linear}
+.session-indicator{font-size:10px;color:#78909c;display:flex;align-items:center;gap:4px;padding:8px 16px;border-top:1px solid rgba(255,255,255,.1)}
+.session-indicator i{font-size:12px}
 </style>
 </head>
 <body>
@@ -2037,6 +2049,115 @@ function pagarParcelaItem(id){
   for(var i=0;i<list.length;i++){if(list[i].id===id){list[i].status='pago';list[i].pagtoEm=today();break}}
   DB.set('contas',list);showNotif('Parcela paga!','success');renderParcelas();renderContas();
 }
+
+// ══ TIMEOUT AUTOMÁTICO POR INATIVIDADE ══════════
+var SESSION_TIMEOUT = 60 * 60 * 1000;   // 1 hora
+var SESSION_WARNING = 55 * 60 * 1000;   // aviso aos 55 min
+var _sessionTimer = null;
+var _sessionWarnTimer = null;
+var _sessionCountdown = null;
+var _sessionStarted = false;
+var _timeoutShowing = false;
+
+function createTimeoutOverlay(){
+  if(document.getElementById('timeout-overlay'))return;
+  var d=document.createElement('div');d.className='timeout-overlay';d.id='timeout-overlay';
+  d.innerHTML='<div class="timeout-box"><div class="timeout-icon"><i class="ti ti-clock-pause"></i></div><div class="timeout-title">Sessão prestes a expirar</div><div class="timeout-msg">Você está inativo há quase 1 hora.<br>A sessão será encerrada automaticamente.</div><div class="timeout-countdown" id="timeout-countdown">05:00</div><div class="timeout-bar"><div class="timeout-bar-fill" id="timeout-bar-fill" style="width:100%"></div></div><button class="btn btn-primary" style="width:100%;padding:14px;font-size:14px" onclick="continueSession()"><i class="ti ti-refresh" style="margin-right:6px"></i>Continuar Conectado</button><div style="margin-top:10px"><button class="btn btn-outline" style="font-size:12px" onclick="autoLogoutNow()"><i class="ti ti-logout" style="margin-right:4px"></i>Sair agora</button></div></div>';
+  document.body.appendChild(d);
+}
+
+function startSessionTimer(){
+  if(_sessionStarted)return;
+  _sessionStarted=true;
+  resetSessionActivity();
+  // Eventos de atividade
+  var events=['mousemove','mousedown','keydown','scroll','touchstart','click'];
+  events.forEach(function(evt){
+    document.addEventListener(evt,function(){
+      if(!currentUser)return;
+      if(_timeoutShowing)return;
+      resetSessionActivity();
+    },{passive:true});
+  });
+  // Indicador na sidebar
+  updateSessionIndicator();
+}
+
+function resetSessionActivity(){
+  clearTimeout(_sessionTimer);
+  clearTimeout(_sessionWarnTimer);
+  clearInterval(_sessionCountdown);
+  _timeoutShowing=false;
+  var el=document.getElementById('timeout-overlay');
+  if(el)el.classList.remove('show');
+  if(!currentUser)return;
+  _sessionWarnTimer=setTimeout(showTimeoutWarning,SESSION_WARNING);
+  _sessionTimer=setTimeout(autoLogoutNow,SESSION_TIMEOUT);
+}
+
+function showTimeoutWarning(){
+  if(!currentUser)return;
+  createTimeoutOverlay();
+  _timeoutShowing=true;
+  document.getElementById('timeout-overlay').classList.add('show');
+  var remaining=300;
+  updateTimeoutDisplay(remaining);
+  _sessionCountdown=setInterval(function(){
+    remaining--;
+    if(remaining<=0){clearInterval(_sessionCountdown);autoLogoutNow()}
+    else updateTimeoutDisplay(remaining);
+  },1000);
+}
+
+function updateTimeoutDisplay(sec){
+  var m=Math.floor(sec/60),s=sec%60;
+  var cdEl=document.getElementById('timeout-countdown');
+  if(cdEl)cdEl.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  var barEl=document.getElementById('timeout-bar-fill');
+  if(barEl)barEl.style.width=Math.round(sec/300*100)+'%';
+}
+
+function continueSession(){
+  resetSessionActivity();
+  showNotif('Sessão renovada!','success');
+}
+
+function autoLogoutNow(){
+  _timeoutShowing=false;_sessionStarted=false;
+  clearTimeout(_sessionTimer);clearTimeout(_sessionWarnTimer);clearInterval(_sessionCountdown);
+  var el=document.getElementById('timeout-overlay');if(el)el.classList.remove('show');
+  showNotif('Sessão encerrada por inatividade','error');
+  doLogout();
+}
+
+function updateSessionIndicator(){
+  var sb=document.querySelector('.sidebar-user');
+  if(!sb||document.getElementById('session-indicator'))return;
+  var div=document.createElement('div');div.className='session-indicator';div.id='session-indicator';
+  div.innerHTML='<i class="ti ti-shield-check"></i><span>Sessão segura · Timeout: 1h</span>';
+  sb.parentNode.insertBefore(div,sb.nextSibling);
+}
+
+// — Sincronizar perfil do usuário para regras do Firestore —
+function syncUserProfile(){
+  if(!currentUser||!_firestoreReady)return;
+  firestore.collection('user_profiles').doc(currentUser.id).set({
+    clinicId:currentUser.consultorioId||'',
+    masterAdmin:currentUser.masterAdmin||false,
+    perfil:currentUser.perfil||'',
+    status:currentUser.status||'ativo',
+    email:currentUser.email||'',
+    updatedAt:new Date().toISOString()
+  }).catch(function(err){console.error('syncUserProfile error:',err)});
+}
+
+// — Hook initApp para iniciar timeout e sincronizar perfil —
+var _origInitApp2=initApp;
+initApp=function(){
+  _origInitApp2();
+  startSessionTimer();
+  syncUserProfile();
+};
 
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
