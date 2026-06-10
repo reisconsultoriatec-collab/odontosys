@@ -367,6 +367,14 @@ textarea{resize:vertical;min-height:76px}
 .timeout-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#f44336,#ff9800);transition:width 1s linear}
 .session-indicator{font-size:10px;color:#78909c;display:flex;align-items:center;gap:4px;padding:8px 16px;border-top:1px solid rgba(255,255,255,.1)}
 .session-indicator i{font-size:12px}
+/* ══ SELETOR CONSULTÓRIO MASTER ══ */
+.clinic-selector{padding:5px 10px;border:1.5px solid #90caf9;border-radius:8px;font-size:12px;font-weight:600;color:#1565C0;background:#e3f2fd;outline:none;cursor:pointer;font-family:inherit;max-width:200px;transition:.2s}
+.clinic-selector:hover{border-color:#1565C0;background:#bbdefb}
+.clinic-selector:focus{box-shadow:0 0 0 3px rgba(21,101,192,.15)}
+.clinic-selector option{font-weight:400;color:#1a1a2e}
+.master-badge-top{display:inline-flex;align-items:center;gap:4px;background:#4a148c;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;margin-left:6px;vertical-align:middle}
+.usr-role-section{font-size:11px;font-weight:700;text-transform:uppercase;color:#78909c;padding:10px 0 6px;border-bottom:1px solid #f0f0f0;margin-bottom:8px;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
+.usr-role-section i{font-size:14px}
 </style>
 </head>
 <body>
@@ -457,6 +465,7 @@ textarea{resize:vertical;min-height:76px}
   <div style="display:flex;align-items:center;gap:10px">
     <button class="hamburger" id="hamburger" onclick="toggleSidebar()"><span></span><span></span><span></span></button>
     <div class="topbar-title" id="topbar-title">Dashboard</div>
+    <select class="clinic-selector" id="clinic-selector" onchange="switchClinic(this.value)" style="display:none"></select>
   </div>
   <div class="gsearch-wrap">
     <i class="ti ti-search gsearch-icon"></i>
@@ -2158,6 +2167,313 @@ initApp=function(){
   startSessionTimer();
   syncUserProfile();
 };
+
+// ══ PERFIS AVANÇADOS + SELETOR CONSULTÓRIO ══════
+
+// — Seletor de consultório (Master Admin) —
+function populateClinicSelector(){
+  var sel=document.getElementById('clinic-selector');if(!sel)return;
+  if(!isMaster()){sel.style.display='none';return}
+  var clinics=DB.get('consultorios');
+  if(!clinics.length){sel.style.display='none';return}
+  sel.style.display='inline-block';
+  var cur=_currentClinicId;
+  sel.innerHTML='<option value="">— Todos Consultórios —</option>'+clinics.map(function(c){return'<option value="'+c.id+'"'+(c.id===cur?' selected':'')+'>'+c.nome+'</option>'}).join('');
+}
+
+function switchClinic(clinicId){
+  if(!isMaster())return;
+  _currentClinicId=clinicId||'';
+  // Atualizar nome na sidebar
+  var clinics=DB.get('consultorios');
+  var cNome='Todos Consultórios';
+  for(var i=0;i<clinics.length;i++){if(clinics[i].id===clinicId){cNome=clinics[i].nome;break}}
+  var sbC=document.getElementById('sb-clinic');if(sbC)sbC.textContent=clinicId?cNome:'Todos Consultórios (Master)';
+  // Re-renderizar seção ativa
+  var activeSection=document.querySelector('.section.active');
+  if(activeSection){
+    var sid=activeSection.id.replace('section-','');
+    if(renders[sid])renders[sid]();
+  }
+  showNotif('Consultório: '+(clinicId?cNome:'Todos'),'success');
+}
+
+// — Override applyPermissions para mostrar seletor —
+var _origApplyPerms=applyPermissions;
+applyPermissions=function(){
+  _origApplyPerms();
+  populateClinicSelector();
+  // Master vê a badge
+  if(isMaster()){
+    var title=document.getElementById('sb-user-role');
+    if(title&&title.textContent.indexOf('★')<0)title.textContent='★ '+title.textContent;
+  }
+};
+
+// — Override renderUsuarios com visibilidade por cargo —
+var _origRenderUsuarios=renderUsuarios;
+renderUsuarios=function(){
+  var list=DB.get('usuarios'),perfis=DB.get('perfis'),consultorios=DB.get('consultorios');
+  var isMst=isMaster();
+  var isAdm=!isMst&&currentUser&&currentUser.perfil==='admin';
+  var canEdit=isMst||isAdm;
+  // Populate clinic filter (Master only)
+  var fcEl=document.getElementById('usr-filter-clinic');
+  if(fcEl){
+    if(isMst){
+      var cv=fcEl.value;
+      fcEl.innerHTML='<option value="">Todos consultórios</option>'+consultorios.map(function(c){return'<option value="'+c.id+'">'+c.nome+'</option>'}).join('');
+      fcEl.value=cv;
+    }
+  }
+  var ufr=document.getElementById('usr-filter-row');if(ufr)ufr.style.display=isMst?'flex':'none';
+  // Filters
+  var filterClinic=isMst?(document.getElementById('usr-filter-clinic')||{}).value:'';
+  var filterStatus=(document.getElementById('usr-filter-status')||{}).value||'';
+  // Non-master: only own clinic
+  if(!isMst)list=list.filter(function(u){return u.consultorioId===currentUser.consultorioId});
+  if(filterClinic)list=list.filter(function(u){return u.consultorioId===filterClinic});
+  if(filterStatus==='pendente')list=list.filter(function(u){return!u.aprovado});
+  else if(filterStatus)list=list.filter(function(u){return u.aprovado&&u.status===filterStatus});
+  // Sort: pending first, then by name
+  list.sort(function(a,b){
+    if(!a.aprovado&&b.aprovado)return -1;
+    if(a.aprovado&&!b.aprovado)return 1;
+    return(a.nome||'').localeCompare(b.nome||'');
+  });
+  var el=document.getElementById('usuarios-list');
+  if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-users"></i>Nenhum usuário encontrado</div>';return}
+  var rC={master:'role-master',admin:'role-admin',dentista:'role-dentista',recepcionista:'role-recep',financeiro:'role-financeiro'};
+  // Group by role for better organization
+  var groups={};
+  list.forEach(function(u){
+    var role=u.masterAdmin?'master':(u.perfil||'outro');
+    if(!groups[role])groups[role]=[];
+    groups[role].push(u);
+  });
+  var roleOrder=['master','admin','dentista','recepcionista','financeiro','outro'];
+  var roleLabels={master:'Administrador Master',admin:'Administradores',dentista:'Dentistas',recepcionista:'Recepcionistas',financeiro:'Financeiro',outro:'Outros'};
+  var roleIcons={master:'ti-crown',admin:'ti-shield-check',dentista:'ti-user-heart',recepcionista:'ti-user',financeiro:'ti-coin',outro:'ti-user'};
+  var html='';
+  roleOrder.forEach(function(role){
+    if(!groups[role]||!groups[role].length)return;
+    html+='<div class="usr-role-section"><i class="ti '+roleIcons[role]+'"></i>'+roleLabels[role]+' ('+groups[role].length+')</div>';
+    html+=groups[role].map(function(u){
+      var p=null;for(var i=0;i<perfis.length;i++){if(perfis[i].id===u.perfil){p=perfis[i];break}}
+      var rc=rC[u.masterAdmin?'master':u.perfil]||'role-recep';
+      var isPending=!u.aprovado;
+      var cltNome=u.consultorioNome||'Sem consultório';
+      if(u.masterAdmin)cltNome='Todos os consultórios';
+      var actions='';
+      if(isMst&&isPending)actions+='<button class="btn btn-success btn-sm" onclick="aprovarUsuario(\''+u.id+'\')" title="Aprovar"><i class="ti ti-check"></i></button>';
+      if(isMst)actions+='<button class="btn btn-outline btn-sm" onclick="editUsuario(\''+u.id+'\')"><i class="ti ti-edit"></i></button>';
+      else if(isAdm&&!u.masterAdmin&&u.id!==currentUser.id)actions+='<button class="btn btn-outline btn-sm" onclick="editUsuario(\''+u.id+'\')"><i class="ti ti-edit"></i></button>';
+      return'<div class="user-card'+(isPending?' pending':'')+'"><div class="patient-avatar" style="background:'+avatarColor(u.nome)+';width:40px;height:40px;font-size:13px;min-width:40px">'+initials(u.nome)+'</div><div class="user-card-info"><div class="user-card-name">'+u.nome+(u.masterAdmin?' <span class="master-badge-top"><i class="ti ti-crown" style="font-size:10px"></i>Master</span>':'')+'</div><div class="user-card-sub">'+(u.email||'—')+' · <span class="role-badge '+rc+'">'+(u.masterAdmin?'Master':(p?p.nome:'—'))+'</span> · <span style="font-size:10px;color:#546e7a">'+cltNome+'</span></div></div>'+(isPending?'<span class="badge badge-amber">Pendente</span>':'<span class="badge '+(u.status==='ativo'?'badge-green':'badge-red')+'">'+u.status+'</span>')+actions+'</div>';
+    }).join('');
+  });
+  el.innerHTML=html;
+};
+
+// — Override editUsuario para respeitar permissões —
+var _origEditUsuario=editUsuario;
+editUsuario=function(id){
+  var u=null;var list=DB.get('usuarios');for(var i=0;i<list.length;i++){if(list[i].id===id){u=list[i];break}}
+  if(!u)return;
+  var isMst=isMaster();
+  var isAdm=!isMst&&currentUser&&currentUser.perfil==='admin';
+  document.getElementById('usr-modal-title').textContent='Editar Usuário';
+  document.getElementById('usr-edit-id').value=u.id;
+  document.getElementById('usr-nome').value=u.nome||'';
+  document.getElementById('usr-email').value=u.email||'';
+  document.getElementById('usr-status').value=u.status||'ativo';
+  document.getElementById('usr-aprovado').value=u.aprovado?'true':'false';
+  openModal('addUsuario');
+  setTimeout(function(){
+    var perfilEl=document.getElementById('usr-perfil');
+    var clinicEl=document.getElementById('usr-consultorio');
+    var aprovEl=document.getElementById('usr-aprovado');
+    if(perfilEl)perfilEl.value=u.perfil||'';
+    if(clinicEl)clinicEl.value=u.consultorioId||'';
+    // Admin de clínica: não pode mudar consultório, aprovação, nem promover a master
+    if(isAdm&&!isMst){
+      if(clinicEl){clinicEl.disabled=true;clinicEl.value=currentUser.consultorioId}
+      if(aprovEl)aprovEl.disabled=true;
+      // Filtrar perfis: admin não pode atribuir 'master'
+      if(perfilEl){
+        var opts=perfilEl.querySelectorAll('option');
+        opts.forEach(function(o){if(o.value==='master')o.style.display='none'});
+      }
+    }else{
+      if(clinicEl)clinicEl.disabled=false;
+      if(aprovEl)aprovEl.disabled=false;
+    }
+  },50);
+};
+
+// — Override saveUsuario para Master associar a todos —
+var _origSaveUsuario=saveUsuario;
+saveUsuario=function(){
+  var id=document.getElementById('usr-edit-id').value;if(!id)return;
+  var nome=document.getElementById('usr-nome').value.trim();
+  if(!nome){showNotif('Preencha o nome','error');return}
+  var consultorioId=document.getElementById('usr-consultorio').value;
+  var consultorios=DB.get('consultorios');var clt=null;
+  for(var i=0;i<consultorios.length;i++){if(consultorios[i].id===consultorioId){clt=consultorios[i];break}}
+  var aprovado=document.getElementById('usr-aprovado').value==='true';
+  var perfil=document.getElementById('usr-perfil').value;
+  var list=DB.get('usuarios');
+  for(var j=0;j<list.length;j++){
+    if(list[j].id===id){
+      list[j].nome=nome;
+      list[j].perfil=perfil;
+      list[j].status=document.getElementById('usr-status').value;
+      // Só master pode alterar consultório e aprovação
+      if(isMaster()){
+        list[j].consultorioId=consultorioId;
+        list[j].consultorioNome=clt?clt.nome:'';
+        list[j].aprovado=aprovado;
+      }
+      break;
+    }
+  }
+  DB.set('usuarios',list);closeModal('addUsuario');
+  // Re-enable disabled fields
+  var cEl=document.getElementById('usr-consultorio');if(cEl)cEl.disabled=false;
+  var aEl=document.getElementById('usr-aprovado');if(aEl)aEl.disabled=false;
+  addLog('edit','Usuário editado',nome);showNotif('Atualizado!','success');renderUsuarios();
+  if(id===currentUser.id){
+    for(var k=0;k<list.length;k++){if(list[k].id===id){currentUser=list[k];break}}
+    _currentClinicId=currentUser.consultorioId||'';applyPermissions();
+  }
+  // Sync profile if changed
+  var edited=null;for(var m=0;m<list.length;m++){if(list[m].id===id){edited=list[m];break}}
+  if(edited&&_firestoreReady){
+    firestore.collection('user_profiles').doc(edited.id).set({
+      clinicId:edited.consultorioId||'',masterAdmin:edited.masterAdmin||false,
+      perfil:edited.perfil||'',status:edited.status||'ativo',
+      email:edited.email||'',updatedAt:new Date().toISOString()
+    }).catch(function(e){console.error('syncProfile:',e)});
+  }
+};
+
+// — Hook initApp para popular seletor —
+var _origInitApp3=initApp;
+initApp=function(){
+  _origInitApp3();
+  populateClinicSelector();
+};
+
+// ══ ASSOCIAR TODOS CONSULTÓRIOS + EXCLUIR USUÁRIO ══
+
+// — Adicionar opção "Todos" no select de consultório ao editar —
+var _prevOpenModal3=openModal;
+openModal=function(id){
+  _prevOpenModal3(id);
+  if(id==='addUsuario'){
+    setTimeout(function(){
+      var sel=document.getElementById('usr-consultorio');if(!sel||!isMaster())return;
+      if(!sel.querySelector('option[value="__todos__"]')){
+        var opt=document.createElement('option');opt.value='__todos__';opt.textContent='★ Todos os Consultórios';
+        var first=sel.querySelector('option');if(first&&first.nextSibling)sel.insertBefore(opt,first.nextSibling);else sel.appendChild(opt);
+      }
+      var editId=document.getElementById('usr-edit-id').value;
+      if(editId){var users=DB.get('usuarios');for(var i=0;i<users.length;i++){if(users[i].id===editId&&users[i].todosConsultorios){sel.value='__todos__';break}}}
+    },70);
+  }
+};
+
+// — Override saveUsuario para tratar "__todos__" —
+var _prevSaveUsuario2=saveUsuario;
+saveUsuario=function(){
+  var cltEl=document.getElementById('usr-consultorio');
+  var editId=document.getElementById('usr-edit-id').value;
+  var isTodos=cltEl&&cltEl.value==='__todos__';
+  if(isTodos&&isMaster())cltEl.value='';
+  _prevSaveUsuario2();
+  if(isTodos&&editId){
+    var list=DB.get('usuarios');
+    for(var i=0;i<list.length;i++){
+      if(list[i].id===editId){
+        list[i].todosConsultorios=true;
+        list[i].consultorioNome='Todos os Consultórios';
+        list[i].consultorioId='';
+        break;
+      }
+    }
+    DB.set('usuarios',list);renderUsuarios();
+  }
+  // Se não é "todos", remover a flag se existia
+  if(!isTodos&&editId){
+    var list2=DB.get('usuarios');
+    for(var j=0;j<list2.length;j++){
+      if(list2[j].id===editId&&list2[j].todosConsultorios){
+        list2[j].todosConsultorios=false;
+        break;
+      }
+    }
+    DB.set('usuarios',list2);
+  }
+};
+
+// — Override populateClinicSelector para users com todosConsultorios —
+var _prevPopClinic=populateClinicSelector;
+populateClinicSelector=function(){
+  var sel=document.getElementById('clinic-selector');if(!sel)return;
+  var show=isMaster()||(currentUser&&currentUser.todosConsultorios);
+  if(!show){sel.style.display='none';return}
+  var clinics=DB.get('consultorios');
+  if(!clinics.length){sel.style.display='none';return}
+  sel.style.display='inline-block';
+  var cur=_currentClinicId;
+  sel.innerHTML='<option value="">— Todos Consultórios —</option>'+clinics.map(function(c){return'<option value="'+c.id+'"'+(c.id===cur?' selected':'')+'>'+c.nome+'</option>'}).join('');
+};
+
+// — Adicionar botão excluir na listagem (post-render) —
+var _prevRenderUsr2=renderUsuarios;
+renderUsuarios=function(){
+  _prevRenderUsr2();
+  if(!isMaster())return;
+  var cards=document.querySelectorAll('#usuarios-list .user-card');
+  cards.forEach(function(card){
+    if(card.querySelector('.btn-del-usr'))return;
+    var editBtn=card.querySelector('button[onclick*="editUsuario"]');
+    if(!editBtn)return;
+    var m=editBtn.getAttribute('onclick').match(/editUsuario\('([^']+)'\)/);
+    if(!m)return;
+    var userId=m[1];
+    if(userId===currentUser.id)return;
+    var del=document.createElement('button');
+    del.className='btn btn-danger btn-sm btn-del-usr';
+    del.title='Excluir usuário';
+    del.innerHTML='<i class="ti ti-trash"></i>';
+    del.onclick=function(e){e.stopPropagation();deleteUsuario(userId)};
+    editBtn.parentNode.appendChild(del);
+  });
+};
+
+// — Função excluir usuário (apenas Master) —
+function deleteUsuario(id){
+  if(!isMaster()){showNotif('Apenas Master pode excluir','error');return}
+  if(id===currentUser.id){showNotif('Não é possível excluir a si mesmo','error');return}
+  var list=DB.get('usuarios');
+  var user=null;for(var i=0;i<list.length;i++){if(list[i].id===id){user=list[i];break}}
+  if(!user)return;
+  if(user.masterAdmin){
+    if(!confirm('ATENÇÃO: Este usuário é um Administrador Master!\n\nDeseja realmente excluí-lo?\n\nNome: '+user.nome+'\nE-mail: '+user.email))return;
+  }else{
+    if(!confirm('Excluir o usuário "'+user.nome+'"?\n\nEsta ação não pode ser desfeita.\nO usuário perderá acesso ao sistema.'))return;
+  }
+  // Remover da lista
+  DB.set('usuarios',list.filter(function(u){return u.id!==id}));
+  // Remover perfil do Firestore (para regras de segurança)
+  if(_firestoreReady){
+    firestore.collection('user_profiles').doc(id).delete()
+      .catch(function(e){console.error('Erro ao remover profile:',e)});
+  }
+  addLog('delete','Usuário excluído',user.nome+' ('+user.email+')');
+  showNotif('Usuário "'+user.nome+'" excluído','success');
+  renderUsuarios();
+}
 
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
