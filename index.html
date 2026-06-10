@@ -245,7 +245,116 @@ textarea{resize:vertical;min-height:76px}
 .clinic-card .clinic-sub{font-size:11px;color:#78909c;margin-top:3px}
 @media print{.sidebar,.topbar,.actions-row,.pron-tab,.btn,.notif{display:none !important}.main{margin-left:0 !important}.rel-header-print{display:block;text-align:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1a237e}body{background:#fff}}
 @media(min-width:769px){.modal-bg{align-items:center}.modal{border-radius:14px;width:560px;max-width:95vw}.modal.wide{width:660px}.agenda-layout{grid-template-columns:260px 1fr !important}}
-@media(max-width:768px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.hamburger{display:flex}.main{margin-left:0}.content{padding:14px}.summary-grid{grid-template-columns:repeat(2,1fr);gap:10px}.metric-val{font-size:18px}.two-col{grid-template-columns:1fr !important}.three-col{grid-template-columns:1fr !important}.form-grid,.form-grid.cols-3{grid-template-columns:1fr}.form-group.span-2,.form-group.span-3{grid-column:span 1}#patient-list,#prof-list{grid-template-columns:1fr !important}.agenda-layout{grid-template-columns:1fr !important}.perm-grid{grid-template-columns:1fr}.card{padding:14px}.odo-svg{width:26px;height:34px}.odo-num{font-size:8px}}
+@media(max-width:768px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.hamburger{display:flex}.main{margin-left:0}.content{padding:14px}.summary-grid{grid-template-columns:repeat(2,1fr);gap:10px}.metric-val{font-size:18px}.two-col{grid-template-columns:1fr !important}.three-col{grid-template-columns:1fr !important}.form-grid,.form-grid.cols-3{grid-template-columns:1fr}.form-group.span-2,.form-group.span-3{grid-column:span 1}#patient-list,#prof-list{grid-template-columns:1fr !important}.agenda-layout{grid-template-columns:1fr !important}.perm-grid{grid-template-columns:1fr}.card{padding:14px}.odo-svg{width:26px;height:34px}.odo-num{font-size:8px}.gsearch-wrap{display:none !important}}
+/* ══ CONEXÃO + BUSCA GLOBAL ══ */
+.conn-indicator{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;transition:.3s;flex-shrink:0}
+.conn-online{background:#e8f5e9;color:#2e7d32}.conn-offline{background:#ffebee;color:#c62828}
+.conn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.conn-online .conn-dot{background:#4caf50;box-shadow:0 0 6px #4caf50;animation:pulse-green 2s infinite}
+.conn-offline .conn-dot{background:#f44336;animation:pulse-red 1s infinite}
+@keyframes pulse-green{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes pulse-red{0%,100%{opacity:1}50%{opacity:.3}}
+.sync-badge{background:#fff3e0;color:#e65100;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px;display:none}
+.sync-badge.show{display:inline-block}
+.sync-toast{position:fixed;top:64px;right:16px;background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:12px 16px;font-size:12px;z-index:500;box-shadow:0 4px 20px rgba(0,0,0,.12);display:none;align-items:center;gap:10px;max-width:320px;animation:slideIn .3s ease}
+.sync-toast.show{display:flex}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.sync-toast-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.sync-toast-icon.ok{background:#e8f5e9;color:#2e7d32}
+.sync-toast-icon.warn{background:#fff3e0;color:#e65100}
+.sync-toast-icon.err{background:#ffebee;color:#c62828}
+.gsearch-wrap{position:relative;flex:1;max-width:320px;margin:0 12px}
+.gsearch-input{width:100%;padding:7px 12px 7px 34px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:13px;background:#f8faff;outline:none;transition:.2s;font-family:inherit}
+.gsearch-input:focus{border-color:#1565C0;background:#fff;box-shadow:0 0 0 3px rgba(21,101,192,.1)}
+.gsearch-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:16px;color:#90a4ae;pointer-events:none}
+.gsearch-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;color:#90a4ae;cursor:pointer;padding:2px;display:none}
+.gsearch-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #e0e0e0;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.15);max-height:420px;overflow-y:auto;z-index:500;display:none}
+.gsearch-results.open{display:block}
+.gsr-section{padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#90a4ae;background:#f8faff;border-bottom:1px solid #f0f0f0;position:sticky;top:0}
+.gsr-item{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:.1s;border-bottom:1px solid #f8f8f8}
+.gsr-item:hover{background:#f5f9ff}
+.gsr-item:last-child{border:none}
+.gsr-item-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.gsr-item-info{flex:1;min-width:0}
+.gsr-item-title{font-size:13px;font-weight:600;color:#1a237e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gsr-item-sub{font-size:11px;color:#78909c;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gsr-item-badge{font-size:10px;flex-shrink:0}
+.gsr-empty{text-align:center;padding:24px;color:#90a4ae;font-size:13px}
+.gsr-highlight{background:#fff9c4;border-radius:2px;padding:0 1px}
+/* ══ LEMBRETES + CONFLITOS ══ */
+.reminder-bell{position:relative;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;font-size:18px;color:#546e7a;flex-shrink:0}
+.reminder-bell:hover{background:#e3f2fd;color:#1565C0}
+.reminder-bell.ringing{animation:bellRing .5s ease}
+@keyframes bellRing{0%{transform:rotate(0)}20%{transform:rotate(14deg)}40%{transform:rotate(-14deg)}60%{transform:rotate(8deg)}80%{transform:rotate(-8deg)}100%{transform:rotate(0)}}
+.reminder-count{position:absolute;top:2px;right:2px;background:#c62828;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.reminder-panel{position:absolute;top:calc(100% + 8px);right:0;width:360px;background:#fff;border:1px solid #e0e0e0;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.15);z-index:500;display:none;max-height:440px;overflow-y:auto}
+.reminder-panel.open{display:block}
+.reminder-panel-head{padding:12px 16px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between}
+.reminder-panel-head h4{font-size:13px;font-weight:700;color:#1a237e}
+.rp-settings{font-size:11px;color:#78909c;display:flex;align-items:center;gap:6px}
+.rp-settings select{padding:2px 6px;font-size:11px;border:1px solid #cfd8dc;border-radius:6px;font-family:inherit}
+.reminder-item{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f8f8f8;transition:.1s}
+.reminder-item:last-child{border:none}
+.reminder-item:hover{background:#f5f9ff}
+.reminder-item.urgent{background:#fff8f0;border-left:3px solid #ff9800}
+.reminder-item.imminent{background:#fff5f5;border-left:3px solid #f44336;animation:pulseRow 2s infinite}
+@keyframes pulseRow{0%,100%{opacity:1}50%{opacity:.85}}
+.ri-time{font-size:20px;font-weight:800;color:#1565C0;min-width:50px;text-align:center;line-height:1}
+.ri-time small{font-size:10px;font-weight:600;color:#78909c;display:block;margin-top:2px}
+.ri-info{flex:1;min-width:0}
+.ri-name{font-size:13px;font-weight:600;color:#1a237e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ri-sub{font-size:11px;color:#78909c;margin-top:2px}
+.ri-countdown{font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;white-space:nowrap;flex-shrink:0}
+.ri-countdown.green{background:#e8f5e9;color:#2e7d32}
+.ri-countdown.amber{background:#fff3e0;color:#e65100}
+.ri-countdown.red{background:#ffebee;color:#c62828}
+.float-reminder{position:fixed;top:70px;right:16px;background:#fff;border:1px solid #ff9800;border-radius:14px;padding:14px 18px;z-index:550;box-shadow:0 6px 24px rgba(255,152,0,.25);display:none;align-items:center;gap:12px;max-width:380px;animation:slideIn .4s ease}
+.float-reminder.show{display:flex}
+.float-reminder .fr-icon{width:40px;height:40px;border-radius:10px;background:#fff3e0;color:#e65100;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.float-reminder .fr-info{flex:1}
+.float-reminder .fr-title{font-size:13px;font-weight:700;color:#1a237e}
+.float-reminder .fr-sub{font-size:11px;color:#78909c;margin-top:2px}
+.float-reminder .fr-time{font-size:12px;font-weight:700;color:#e65100;margin-top:3px}
+.float-reminder .fr-close{background:none;border:none;font-size:18px;color:#90a4ae;cursor:pointer;padding:4px;flex-shrink:0}
+.conflict-warn{background:#fff5f5;border:1px solid #ffcdd2;border-radius:10px;padding:10px 14px;margin-top:10px;font-size:12px;color:#c62828;display:none;align-items:flex-start;gap:8px}
+.conflict-warn.show{display:flex}
+.conflict-warn i{font-size:18px;flex-shrink:0;margin-top:1px}
+.dur-hint{font-size:10px;color:#78909c;margin-top:2px}
+/* ══ FLUXO CAIXA + PARCELAS ══ */
+.fc-period-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.fc-period{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:16px;text-align:center}
+.fc-period-label{font-size:11px;color:#78909c;font-weight:600;text-transform:uppercase;margin-bottom:10px}
+.fc-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px}
+.fc-bar-label{width:60px;text-align:right;color:#78909c;font-size:11px;flex-shrink:0}
+.fc-bar{flex:1;height:18px;border-radius:4px;background:#eceff1;overflow:hidden;position:relative}
+.fc-bar-fill{height:100%;border-radius:4px;transition:width .5s ease;min-width:2px}
+.fc-bar-fill.income{background:linear-gradient(90deg,#66bb6a,#43a047)}
+.fc-bar-fill.expense{background:linear-gradient(90deg,#ef5350,#e53935)}
+.fc-bar-val{width:90px;font-weight:600;font-size:11px;flex-shrink:0}
+.fc-bar-val.pos{color:#2e7d32}.fc-bar-val.neg{color:#c62828}
+.fc-net{font-size:18px;font-weight:800;margin-top:6px}
+.fc-net.pos{color:#2e7d32}.fc-net.neg{color:#c62828}
+.fc-net-label{font-size:10px;color:#78909c;margin-top:2px}
+.fc-timeline-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f0f0f0;font-size:12px}
+.fc-timeline-item:last-child{border:none}
+.fc-tl-date{min-width:70px;font-weight:600;color:#546e7a;flex-shrink:0}
+.fc-tl-desc{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-tl-val{font-weight:700;white-space:nowrap;flex-shrink:0}
+.fc-tl-val.pos{color:#2e7d32}.fc-tl-val.neg{color:#c62828}
+.parc-group{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:16px;margin-bottom:12px}
+.parc-group-head{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.parc-group-info{flex:1;min-width:0}
+.parc-group-title{font-size:14px;font-weight:700;color:#1a237e}
+.parc-group-sub{font-size:11px;color:#78909c;margin-top:2px}
+.parc-progress{height:10px;border-radius:5px;background:#eceff1;overflow:hidden;margin-bottom:8px}
+.parc-progress-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,#66bb6a,#43a047);transition:width .4s}
+.parc-stats{display:flex;gap:16px;font-size:11px;color:#78909c;flex-wrap:wrap}
+.parc-stats b{color:#1a237e}
+.parc-items{margin-top:10px;border-top:1px solid #f0f0f0;padding-top:8px}
+.parc-item{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;border-bottom:1px solid #f8f8f8}
+.parc-item:last-child{border:none}
+.parc-item-n{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.parc-item-n.paid{background:#e8f5e9;color:#2e7d32}.parc-item-n.pending{background:#fff3e0;color:#e65100}.parc-item-n.overdue{background:#ffebee;color:#c62828}
 </style>
 </head>
 <body>
@@ -337,11 +446,25 @@ textarea{resize:vertical;min-height:76px}
     <button class="hamburger" id="hamburger" onclick="toggleSidebar()"><span></span><span></span><span></span></button>
     <div class="topbar-title" id="topbar-title">Dashboard</div>
   </div>
+  <div class="gsearch-wrap">
+    <i class="ti ti-search gsearch-icon"></i>
+    <input type="text" class="gsearch-input" id="gsearch-input" placeholder="Buscar pacientes, consultas, tarefas..." oninput="globalSearch()" onfocus="globalSearchFocus()" autocomplete="off">
+    <button class="gsearch-clear" id="gsearch-clear" onclick="clearGlobalSearch()"><i class="ti ti-x"></i></button>
+    <div class="gsearch-results" id="gsearch-results"></div>
+  </div>
   <div class="topbar-actions">
+    <div class="reminder-bell" id="reminder-bell" onclick="toggleReminderPanel()" title="Lembretes"><i class="ti ti-bell"></i><span class="reminder-count" id="reminder-count" style="display:none">0</span>
+      <div class="reminder-panel" id="reminder-panel">
+        <div class="reminder-panel-head"><h4><i class="ti ti-bell" style="margin-right:4px"></i>Próximas Consultas</h4><div class="rp-settings">Avisar: <select id="reminder-minutes" onchange="saveReminderConfig()"><option value="5">5 min</option><option value="10">10 min</option><option value="15" selected>15 min</option><option value="30">30 min</option><option value="60">1 hora</option></select></div></div>
+        <div id="reminder-list"></div>
+      </div>
+    </div>
+    <div class="conn-indicator conn-online" id="conn-indicator"><div class="conn-dot"></div><span id="conn-label">Online</span><span class="sync-badge" id="sync-badge">0</span></div>
     <button class="btn btn-primary btn-sm" onclick="openModal('addAppt')" id="btn-novo-agendamento"><i class="ti ti-plus"></i><span>Novo Agendamento</span></button>
     <div class="avatar" id="top-avatar" title="Sair" onclick="doLogout()"></div>
   </div>
 </header>
+<div class="sync-toast" id="sync-toast"><div class="sync-toast-icon" id="sync-toast-icon"><i class="ti ti-wifi" id="sync-toast-i"></i></div><div id="sync-toast-msg">Conectado</div></div>
 <div class="content">
 
 <!-- DASHBOARD -->
@@ -555,6 +678,8 @@ textarea{resize:vertical;min-height:76px}
     <button class="pron-tab-btn active" onclick="finTab(this,'movimentacoes')"><i class="ti ti-list" style="margin-right:4px"></i>Movimentações</button>
     <button class="pron-tab-btn" onclick="finTab(this,'contas')"><i class="ti ti-calendar-due" style="margin-right:4px"></i>Contas</button>
     <button class="pron-tab-btn" onclick="finTab(this,'comissoes')"><i class="ti ti-award" style="margin-right:4px"></i>Comissões</button>
+    <button class="pron-tab-btn" onclick="finTab(this,'fluxocaixa')"><i class="ti ti-trending-up" style="margin-right:4px"></i>Fluxo de Caixa</button>
+    <button class="pron-tab-btn" onclick="finTab(this,'parcelas')"><i class="ti ti-receipt-2" style="margin-right:4px"></i>Parcelas</button>
   </div>
   <div id="fin-movimentacoes" class="fin-pane active">
     <div class="summary-grid">
@@ -590,7 +715,39 @@ textarea{resize:vertical;min-height:76px}
       <div id="comissoes-list"></div>
     </div>
   </div>
+  <div id="fin-fluxocaixa" class="fin-pane" style="display:none">
+    <div class="fc-period-grid" id="fc-periods"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" class="two-col">
+      <div class="card"><div class="card-title"><i class="ti ti-trending-up"></i>Projeção Visual</div>
+        <div id="fc-bars"></div>
+      </div>
+      <div class="card"><div class="card-title"><i class="ti ti-list-details"></i>Próximos Vencimentos</div>
+        <div id="fc-timeline" style="max-height:360px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+  <div id="fin-parcelas" class="fin-pane" style="display:none">
+    <div class="actions-row">
+      <button class="btn btn-primary btn-sm" onclick="openModal('addParcela')"><i class="ti ti-plus"></i>Novo Parcelamento</button>
+    </div>
+    <div id="parcelas-list"></div>
+  </div>
 </div>
+
+<div class="modal-bg" id="modal-addParcela"><div class="modal">
+  <div class="modal-head"><h3><i class="ti ti-receipt-2" style="margin-right:6px"></i>Parcelar Tratamento</h3><button class="modal-close" onclick="closeModal('addParcela')"><i class="ti ti-x"></i></button></div>
+  <div class="form-grid">
+    <div class="form-group"><label>Paciente</label><select id="parc-pac"></select></div>
+    <div class="form-group"><label>Profissional</label><select id="parc-prof"></select></div>
+    <div class="form-group span-2"><label>Descrição do tratamento</label><input type="text" id="parc-desc" placeholder="Ex: Aparelho ortodôntico completo"></div>
+    <div class="form-group"><label>Valor Total (R$)</label><input type="number" id="parc-valor" step="0.01" placeholder="0.00" oninput="calcParcelaPreview()"></div>
+    <div class="form-group"><label>Nº de Parcelas</label><input type="number" id="parc-qtd" value="6" min="2" max="48" oninput="calcParcelaPreview()"></div>
+    <div class="form-group"><label>1º Vencimento</label><input type="date" id="parc-inicio"></div>
+    <div class="form-group"><label>Entrada (R$)</label><input type="number" id="parc-entrada" value="0" step="0.01" oninput="calcParcelaPreview()"></div>
+  </div>
+  <div id="parc-preview" style="margin-top:14px;padding:14px;background:#f5f9ff;border-radius:10px;border:1px solid #e3f2fd;font-size:12px;display:none"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-outline" onclick="closeModal('addParcela')">Cancelar</button><button class="btn btn-success" onclick="saveParcela()"><i class="ti ti-check"></i>Gerar Parcelas</button></div>
+</div></div>
 
 <!-- RELATÓRIOS -->
 <div id="section-relatorios" class="section">
@@ -687,9 +844,13 @@ textarea{resize:vertical;min-height:76px}
     <div class="form-group"><label>Sala</label><select id="appt-sala"><option>Sala 1</option><option>Sala 2</option></select></div>
     <div class="form-group"><label>Status</label><select id="appt-status"><option>Agendado</option><option>Confirmado</option><option>Aguardando</option><option>Presente</option><option>Faltou</option></select></div>
     <div class="form-group"><label>Valor (R$)</label><input type="number" id="appt-valor" step="0.01"></div>
+    <div class="form-group"><label>Duração (min)</label><input type="number" id="appt-duracao" value="30" min="5" step="5"><div class="dur-hint" id="dur-hint">Tempo estimado do procedimento</div></div>
+    <div class="form-group"><label>Recorrência</label><select id="appt-recorrencia"><option value="">Nenhuma</option><option value="7">Semanal</option><option value="14">Quinzenal</option><option value="30">Mensal</option><option value="60">Bimestral</option><option value="90">Trimestral</option><option value="180">Semestral</option><option value="365">Anual</option></select></div>
+    <div class="form-group" id="appt-recqtd-wrap" style="display:none"><label>Quantas repetições?</label><input type="number" id="appt-recqtd" value="3" min="1" max="24"></div>
     <div class="form-group span-2"><label>Observações</label><textarea id="appt-obs" rows="2"></textarea></div>
+    <div class="conflict-warn" id="conflict-warn"><i class="ti ti-alert-triangle"></i><div><b>Conflito de horário!</b><div id="conflict-detail"></div></div></div>
   </div>
-  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-outline" onclick="closeModal('addAppt')">Cancelar</button><button class="btn btn-primary" onclick="saveAppt()"><i class="ti ti-check"></i>Confirmar</button></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-outline" onclick="closeModal('addAppt')">Cancelar</button><button class="btn btn-primary" onclick="saveApptWithFeatures()"><i class="ti ti-check"></i>Confirmar</button></div>
 </div></div>
 
 <!-- MODAL PACIENTE -->
@@ -1276,6 +1437,606 @@ var renders={dashboard:renderDashboard,agenda:function(){renderCal();setAgendaVi
 
 // ══ INIT ════════════════════════════════════════
 function initApp(){selDate=today();var p=today().split('-');document.getElementById('agenda-date-label').textContent=parseInt(p[2])+'/'+parseInt(p[1])+'/'+p[0];buildOdontograma();renderCal();renderDashboard()}
+
+// ══ CONEXÃO + FILA OFFLINE ══════════════════════
+var _offlineQueue = [];
+var _isOnline = navigator.onLine;
+
+function updateConnUI(){
+  var el=document.getElementById('conn-indicator');
+  var lb=document.getElementById('conn-label');
+  var bg=document.getElementById('sync-badge');
+  if(!el)return;
+  if(_isOnline){el.className='conn-indicator conn-online';lb.textContent='Online'}
+  else{el.className='conn-indicator conn-offline';lb.textContent='Offline'}
+  if(_offlineQueue.length>0){bg.textContent=_offlineQueue.length;bg.classList.add('show')}
+  else{bg.classList.remove('show')}
+}
+
+function showSyncToast(type,msg){
+  var t=document.getElementById('sync-toast');
+  var icon=document.getElementById('sync-toast-icon');
+  var ic=document.getElementById('sync-toast-i');
+  var m=document.getElementById('sync-toast-msg');
+  if(!t)return;
+  icon.className='sync-toast-icon '+type;
+  ic.className='ti '+(type==='ok'?'ti-wifi':type==='warn'?'ti-wifi-off':'ti-alert-triangle');
+  m.textContent=msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer=setTimeout(function(){t.classList.remove('show')},4000);
+}
+
+function flushOfflineQueue(){
+  if(!_isOnline||!_firestoreReady||_offlineQueue.length===0)return;
+  var queue=_offlineQueue.slice();_offlineQueue=[];
+  var count=queue.length;
+  showSyncToast('warn','Sincronizando '+count+' alteração(ões)...');
+  var promises=queue.map(function(op){
+    if(op.type==='set')return firestore.collection('app_data').doc(op.key).set({items:op.value}).catch(function(e){console.error('Sync err:',e);_offlineQueue.push(op)});
+    if(op.type==='setObj')return firestore.collection('app_objects').doc(op.key).set({value:op.value}).catch(function(e){console.error('Sync err:',e);_offlineQueue.push(op)});
+    return Promise.resolve();
+  });
+  Promise.all(promises).then(function(){
+    if(_offlineQueue.length===0)showSyncToast('ok','Tudo sincronizado!');
+    else showSyncToast('warn',_offlineQueue.length+' pendente(s)');
+    updateConnUI();
+  });
+}
+
+window.addEventListener('online',function(){_isOnline=true;updateConnUI();showSyncToast('ok','Conexão restabelecida!');setTimeout(flushOfflineQueue,1000)});
+window.addEventListener('offline',function(){_isOnline=false;updateConnUI();showSyncToast('err','Sem conexão — alterações serão salvas localmente')});
+
+// Override DB to queue when offline + auto-migrate old data
+var _origDBset=DB.set;
+DB.set=function(k,v){
+  var key=GLOBAL_KEYS.indexOf(k)>=0?k:(_currentClinicId?_currentClinicId+'_'+k:k);
+  _cache['c_'+key]=v;
+  if(_firestoreReady){
+    if(_isOnline){
+      firestore.collection('app_data').doc(key).set({items:JSON.parse(JSON.stringify(v))}).catch(function(err){console.error('DB.set error:',err);_offlineQueue.push({type:'set',key:key,value:JSON.parse(JSON.stringify(v))});updateConnUI()});
+    }else{
+      _offlineQueue.push({type:'set',key:key,value:JSON.parse(JSON.stringify(v))});
+      updateConnUI();
+    }
+  }
+};
+var _origDBsetObj=DB.setObj;
+DB.setObj=function(k,v){
+  var key=_currentClinicId?_currentClinicId+'_'+k:k;
+  _cache['o_'+key]=v;
+  if(_firestoreReady){
+    if(_isOnline){
+      firestore.collection('app_objects').doc(key).set({value:JSON.parse(JSON.stringify(v))}).catch(function(err){console.error('DB.setObj error:',err);_offlineQueue.push({type:'setObj',key:key,value:JSON.parse(JSON.stringify(v))});updateConnUI()});
+    }else{
+      _offlineQueue.push({type:'setObj',key:key,value:JSON.parse(JSON.stringify(v))});
+      updateConnUI();
+    }
+  }
+};
+
+// Override DB.get/getObj with auto-migration from old (non-prefixed) format
+var _origDBget=DB.get;
+DB.get=function(k){
+  var isGlobal=GLOBAL_KEYS.indexOf(k)>=0;
+  var key=isGlobal?k:(_currentClinicId?_currentClinicId+'_'+k:k);
+  var result=_cache['c_'+key]||[];
+  if(result.length===0&&_currentClinicId&&!isGlobal){
+    var oldData=_cache['c_'+k];
+    if(oldData&&oldData.length>0){
+      _cache['c_'+key]=oldData;
+      result=oldData;
+      if(_firestoreReady){
+        firestore.collection('app_data').doc(key).set({items:JSON.parse(JSON.stringify(oldData))})
+          .then(function(){console.log('Auto-migrado: '+k+' → '+key)})
+          .catch(function(err){console.error('Erro migração:',err)});
+      }
+    }
+  }
+  try{return JSON.parse(JSON.stringify(result))}catch(e){return[]}
+};
+var _origDBgetObj=DB.getObj;
+DB.getObj=function(k,d){
+  d=d||{};
+  var key=_currentClinicId?_currentClinicId+'_'+k:k;
+  var val=_cache['o_'+key];
+  if(val===undefined&&_currentClinicId){
+    var oldVal=_cache['o_'+k];
+    if(oldVal!==undefined){
+      _cache['o_'+key]=oldVal;
+      val=oldVal;
+      if(_firestoreReady){
+        firestore.collection('app_objects').doc(key).set({value:JSON.parse(JSON.stringify(oldVal))})
+          .then(function(){console.log('Auto-migrado obj: '+k+' → '+key)})
+          .catch(function(err){console.error('Erro migração obj:',err)});
+      }
+    }
+  }
+  return val!==undefined?val:d;
+};
+
+// ══ BUSCA GLOBAL ════════════════════════════════
+var _gsearchTimeout=null;
+function globalSearch(){
+  clearTimeout(_gsearchTimeout);
+  var q=(document.getElementById('gsearch-input').value||'').trim().toLowerCase();
+  var clearBtn=document.getElementById('gsearch-clear');
+  if(clearBtn)clearBtn.style.display=q?'block':'none';
+  if(q.length<2){document.getElementById('gsearch-results').classList.remove('open');return}
+  _gsearchTimeout=setTimeout(function(){executeGlobalSearch(q)},200);
+}
+function globalSearchFocus(){
+  var q=(document.getElementById('gsearch-input').value||'').trim();
+  if(q.length>=2)executeGlobalSearch(q.toLowerCase());
+}
+function clearGlobalSearch(){
+  document.getElementById('gsearch-input').value='';
+  document.getElementById('gsearch-results').classList.remove('open');
+  document.getElementById('gsearch-clear').style.display='none';
+}
+document.addEventListener('click',function(e){
+  var wrap=document.querySelector('.gsearch-wrap');
+  if(wrap&&!wrap.contains(e.target))document.getElementById('gsearch-results').classList.remove('open');
+});
+
+function highlightMatch(text,q){
+  if(!text)return'';
+  var idx=text.toLowerCase().indexOf(q);
+  if(idx<0)return text;
+  return text.slice(0,idx)+'<span class="gsr-highlight">'+text.slice(idx,idx+q.length)+'</span>'+text.slice(idx+q.length);
+}
+
+function executeGlobalSearch(q){
+  var results=[];
+  // Pacientes
+  DB.get('pacientes').forEach(function(p){
+    if((p.nome||'').toLowerCase().indexOf(q)>=0||(p.tel||'').indexOf(q)>=0||(p.cpf||'').indexOf(q)>=0||(p.email||'').toLowerCase().indexOf(q)>=0){
+      results.push({cat:'Pacientes',icon:'ti-user',iconBg:'#e3f2fd',iconColor:'#1565C0',title:p.nome,sub:[calcAge(p.nasc),p.tel,p.convenio].filter(Boolean).join(' · '),action:"openProntuario('"+p.id+"')"});
+    }
+  });
+  // Agendamentos
+  var pacs=DB.get('pacientes');
+  DB.get('agendamentos').forEach(function(a){
+    var pacNome=a.pacienteNome||'';
+    if(!pacNome){for(var i=0;i<pacs.length;i++){if(pacs[i].id===a.pacienteId){pacNome=pacs[i].nome;break}}}
+    if(pacNome.toLowerCase().indexOf(q)>=0||(a.proc||'').toLowerCase().indexOf(q)>=0||(a.profNome||'').toLowerCase().indexOf(q)>=0){
+      results.push({cat:'Agendamentos',icon:'ti-calendar',iconBg:'#e8f5e9',iconColor:'#2e7d32',title:pacNome+' — '+a.proc,sub:fmtDate(a.data)+' '+a.hora+' · '+(a.profNome||'—'),badge:a.status,badgeCls:SB[a.status]||'badge-gray',action:"selectCalDay('"+a.data+"');goTo('agenda',document.querySelector('nav a[data-section=\"agenda\"]'))"});
+    }
+  });
+  // Profissionais
+  DB.get('profissionais').forEach(function(m){
+    if((m.nome||'').toLowerCase().indexOf(q)>=0||(m.esp||'').toLowerCase().indexOf(q)>=0||(m.cro||'').indexOf(q)>=0){
+      results.push({cat:'Profissionais',icon:'ti-user-heart',iconBg:'#ede7f6',iconColor:'#6a1b9a',title:m.nome,sub:[m.esp,m.cro].filter(Boolean).join(' · '),action:"goTo('profissionais',document.querySelector('nav a[data-section=\"profissionais\"]'))"});
+    }
+  });
+  // Tarefas
+  DB.get('tarefas').forEach(function(t){
+    if((t.desc||'').toLowerCase().indexOf(q)>=0){
+      results.push({cat:'Tarefas',icon:'ti-checkbox',iconBg:'#fff3e0',iconColor:'#e65100',title:t.desc,sub:(t.pri||'')+' · '+(t.date?fmtDate(t.date):'Sem data'),badge:t.done?'Feita':'Pendente',badgeCls:t.done?'badge-green':'badge-amber',action:"goTo('tarefas',document.querySelector('nav a[data-section=\"tarefas\"]'))"});
+    }
+  });
+  // Documentos
+  DB.get('documentos').forEach(function(d){
+    if((d.pacienteNome||'').toLowerCase().indexOf(q)>=0||(d.tipo||'').toLowerCase().indexOf(q)>=0||(d.medicoNome||'').toLowerCase().indexOf(q)>=0){
+      results.push({cat:'Documentos',icon:'ti-file-text',iconBg:'#fce4ec',iconColor:'#c62828',title:d.tipo+' — '+d.pacienteNome,sub:fmtDate(d.data)+' · '+(d.medicoNome||'—'),action:"goTo('documentos',document.querySelector('nav a[data-section=\"documentos\"]'))"});
+    }
+  });
+  // Financeiro
+  DB.get('financeiro').forEach(function(f){
+    if((f.desc||'').toLowerCase().indexOf(q)>=0||(f.pacNome||'').toLowerCase().indexOf(q)>=0){
+      results.push({cat:'Financeiro',icon:'ti-currency-dollar',iconBg:f.tipo==='entrada'?'#e8f5e9':'#ffebee',iconColor:f.tipo==='entrada'?'#2e7d32':'#c62828',title:f.desc,sub:fmtDate(f.data)+' · '+fmtMoney(f.val),badge:f.tipo==='entrada'?'Entrada':'Saída',badgeCls:f.tipo==='entrada'?'badge-green':'badge-red',action:"goTo('financeiro',document.querySelector('nav a[data-section=\"financeiro\"]'))"});
+    }
+  });
+  // Estoque
+  DB.get('estoque').forEach(function(e){
+    if((e.nome||'').toLowerCase().indexOf(q)>=0||(e.forn||'').toLowerCase().indexOf(q)>=0){
+      var st=getEstStatus(e);
+      results.push({cat:'Estoque',icon:'ti-package',iconBg:'#eceff1',iconColor:'#546e7a',title:e.nome,sub:e.qtd+' '+e.un+' · '+(e.forn||'—'),badge:st,badgeCls:st==='Crítico'?'badge-red':st==='Atenção'?'badge-amber':'badge-green',action:"goTo('estoque',document.querySelector('nav a[data-section=\"estoque\"]'))"});
+    }
+  });
+
+  renderGlobalResults(results,q);
+}
+
+function renderGlobalResults(results,q){
+  var el=document.getElementById('gsearch-results');
+  if(!results.length){el.innerHTML='<div class="gsr-empty"><i class="ti ti-search-off" style="font-size:24px;display:block;margin-bottom:6px;opacity:.4"></i>Nenhum resultado para "'+q+'"</div>';el.classList.add('open');return}
+  // Group by category
+  var grouped={};results.forEach(function(r){if(!grouped[r.cat])grouped[r.cat]=[];grouped[r.cat].push(r)});
+  var html='';var total=0;
+  Object.keys(grouped).forEach(function(cat){
+    var items=grouped[cat].slice(0,5);
+    html+='<div class="gsr-section"><i class="ti '+items[0].icon+'" style="margin-right:4px"></i>'+cat+' ('+grouped[cat].length+')</div>';
+    items.forEach(function(r){
+      total++;
+      html+='<div class="gsr-item" onclick="'+r.action+';clearGlobalSearch()"><div class="gsr-item-icon" style="background:'+r.iconBg+';color:'+r.iconColor+'"><i class="ti '+r.icon+'"></i></div><div class="gsr-item-info"><div class="gsr-item-title">'+highlightMatch(r.title,q)+'</div><div class="gsr-item-sub">'+r.sub+'</div></div>'+(r.badge?'<span class="badge '+(r.badgeCls||'badge-gray')+' gsr-item-badge">'+r.badge+'</span>':'')+'</div>';
+    });
+  });
+  el.innerHTML=html;
+  el.classList.add('open');
+}
+
+// Atalho teclado: Ctrl+K ou / para focar busca
+document.addEventListener('keydown',function(e){
+  if((e.ctrlKey&&e.key==='k')||(!e.ctrlKey&&!e.altKey&&!e.metaKey&&e.key==='/'&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'&&document.activeElement.tagName!=='SELECT')){
+    e.preventDefault();var inp=document.getElementById('gsearch-input');if(inp){inp.focus();inp.select()}
+  }
+  if(e.key==='Escape')clearGlobalSearch();
+});
+
+// ══════════════════════════════════════════════════
+// ══ AGENDA AVANÇADA: LEMBRETES + RECORRÊNCIA + CONFLITOS ══
+// ══════════════════════════════════════════════════
+
+var PROC_DURACOES={'Avaliação':30,'Limpeza':45,'Extração':60,'Tratamento de Canal':90,'Clareamento':60,'Aparelho Ortodôntico':45,'Implante':120,'Outro':30};
+function timeToMin(t){if(!t)return 0;var p=t.split(':');return parseInt(p[0])*60+parseInt(p[1])}
+function minToTime(m){var h=Math.floor(m/60),mi=m%60;return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0')}
+
+// — Auto-preencher duração ao mudar procedimento —
+document.addEventListener('change',function(e){
+  if(e.target.id==='appt-proc'){
+    var dur=PROC_DURACOES[e.target.value]||30;
+    var dEl=document.getElementById('appt-duracao');if(dEl)dEl.value=dur;
+    var hEl=document.getElementById('dur-hint');if(hEl)hEl.textContent='Estimado: '+dur+' min para '+e.target.value;
+    checkApptConflict();
+  }
+  if(e.target.id==='appt-recorrencia'){
+    var wrap=document.getElementById('appt-recqtd-wrap');if(wrap)wrap.style.display=e.target.value?'flex':'none';
+  }
+  if(e.target.id==='appt-prof'||e.target.id==='appt-data')checkApptConflict();
+});
+document.addEventListener('input',function(e){
+  if(e.target.id==='appt-hora'||e.target.id==='appt-duracao')checkApptConflict();
+});
+
+// — Detecção de conflito de horário —
+function checkApptConflict(){
+  var profId=(document.getElementById('appt-prof')||{}).value;
+  var data=(document.getElementById('appt-data')||{}).value;
+  var hora=(document.getElementById('appt-hora')||{}).value;
+  var dur=parseInt((document.getElementById('appt-duracao')||{}).value)||30;
+  var editId=(document.getElementById('appt-edit-id')||{}).value;
+  var warnEl=document.getElementById('conflict-warn');
+  var detEl=document.getElementById('conflict-detail');
+  if(!warnEl)return;
+  if(!profId||!data||!hora){warnEl.classList.remove('show');return}
+  var startM=timeToMin(hora),endM=startM+dur;
+  var pacs=DB.get('pacientes');
+  var conflicts=DB.get('agendamentos').filter(function(a){
+    if(a.id===editId)return false;
+    if(a.data!==data||a.profId!==profId)return false;
+    if(a.status==='Faltou')return false;
+    var aS=timeToMin(a.hora),aD=parseInt(a.duracao)||30,aE=aS+aD;
+    return startM<aE&&endM>aS;
+  });
+  if(conflicts.length>0){
+    var html=conflicts.map(function(c){
+      var pn=c.pacienteNome||'';
+      if(!pn){for(var i=0;i<pacs.length;i++){if(pacs[i].id===c.pacienteId){pn=pacs[i].nome;break}}}
+      return'<div style="margin-top:4px">• '+c.hora+' — '+(pn||'—')+' ('+c.proc+', '+(parseInt(c.duracao)||30)+' min)</div>';
+    }).join('');
+    detEl.innerHTML='O profissional já possui consulta(s) neste horário:'+html;
+    warnEl.classList.add('show');
+  }else{warnEl.classList.remove('show')}
+}
+
+// — Salvar com recorrência e duração —
+function saveApptWithFeatures(){
+  var durEl=document.getElementById('appt-duracao');
+  var recEl=document.getElementById('appt-recorrencia');
+  var recQtdEl=document.getElementById('appt-recqtd');
+  var eId=document.getElementById('appt-edit-id').value;
+  var pacId=document.getElementById('appt-paciente').value;
+  var data=document.getElementById('appt-data').value;
+  var hora=document.getElementById('appt-hora').value;
+  if(!pacId||!data||!hora){showNotif('Preencha paciente, data e horário','error');return}
+  var pacs=DB.get('pacientes');var pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===pacId){pac=pacs[i];break}}
+  var profEl=document.getElementById('appt-prof');var meds=DB.get('profissionais');var med=null;for(var j=0;j<meds.length;j++){if(meds[j].id===profEl.value){med=meds[j];break}}
+  var dur=parseInt(durEl.value)||30;
+  var appt={id:eId||uid(),pacienteId:pacId,pacienteNome:pac?pac.nome:'',profId:profEl.value,profNome:med?med.nome:'',data:data,hora:hora,proc:document.getElementById('appt-proc').value,sala:document.getElementById('appt-sala').value,status:document.getElementById('appt-status').value,valor:document.getElementById('appt-valor').value,obs:document.getElementById('appt-obs').value,duracao:dur};
+  var list=DB.get('agendamentos');
+  if(eId){var idx=list.findIndex(function(a){return a.id===eId});if(idx>=0)list[idx]=appt}
+  else list.push(appt);
+  // Gerar recorrências
+  var recDays=parseInt((recEl||{}).value)||0;
+  var recQtd=parseInt((recQtdEl||{}).value)||3;
+  var recCount=0;
+  if(!eId&&recDays>0&&recQtd>0){
+    var baseDate=new Date(data+'T00:00:00');
+    for(var r=1;r<=recQtd;r++){
+      var nextDate=new Date(baseDate);
+      nextDate.setDate(nextDate.getDate()+(recDays*r));
+      var nd=nextDate.toISOString().split('T')[0];
+      list.push({id:uid(),pacienteId:pacId,pacienteNome:pac?pac.nome:'',profId:profEl.value,profNome:med?med.nome:'',data:nd,hora:hora,proc:appt.proc,sala:appt.sala,status:'Agendado',valor:appt.valor,obs:(appt.obs?appt.obs+' | ':'')+'Recorrência '+(r+1)+'/'+(recQtd+1),duracao:dur});
+      recCount++;
+    }
+  }
+  DB.set('agendamentos',list);
+  document.getElementById('appt-edit-id').value='';
+  document.getElementById('appt-modal-title').textContent='Novo Agendamento';
+  if(recEl)recEl.value='';
+  var wrap=document.getElementById('appt-recqtd-wrap');if(wrap)wrap.style.display='none';
+  document.getElementById('conflict-warn').classList.remove('show');
+  closeModal('addAppt');
+  var msg=eId?'Atualizado!':'Agendado!';
+  if(recCount>0)msg+=' +'+recCount+' recorrência(s)';
+  showNotif(msg,'success');
+  selDate=data;renderCal();renderAgenda();renderDashboard();
+}
+
+// — Painel de lembretes —
+var _reminderInterval=null;
+var _lastFloatId='';
+var _floatCreated=false;
+
+function createFloatEl(){
+  if(_floatCreated)return;
+  var d=document.createElement('div');d.className='float-reminder';d.id='float-reminder';
+  d.innerHTML='<div class="fr-icon"><i class="ti ti-bell-ringing"></i></div><div class="fr-info"><div class="fr-title" id="fr-title"></div><div class="fr-sub" id="fr-sub"></div><div class="fr-time" id="fr-time"></div></div><button class="fr-close" onclick="closeFloatReminder()"><i class="ti ti-x"></i></button>';
+  document.body.appendChild(d);_floatCreated=true;
+}
+
+function startReminderEngine(){
+  if(_reminderInterval)clearInterval(_reminderInterval);
+  _reminderInterval=setInterval(checkReminders,30000);
+  setTimeout(checkReminders,2000);
+}
+
+function checkReminders(){
+  if(!currentUser)return;
+  var td=today();var now=new Date();var nowM=now.getHours()*60+now.getMinutes();
+  var remMin=parseInt((document.getElementById('reminder-minutes')||{}).value)||15;
+  var pacs=DB.get('pacientes');
+  var appts=DB.get('agendamentos').filter(function(a){
+    if(a.data!==td)return false;
+    if(a.status==='Faltou'||a.status==='Presente'||a.status==='Chegou')return false;
+    var aM=timeToMin(a.hora);
+    return aM>nowM&&(aM-nowM)<=60;
+  }).sort(function(a,b){return a.hora.localeCompare(b.hora)});
+  // Badge
+  var cEl=document.getElementById('reminder-count');
+  if(cEl){if(appts.length>0){cEl.textContent=appts.length;cEl.style.display='flex'}else cEl.style.display='none'}
+  // Panel list
+  renderReminderList(appts,nowM,pacs);
+  // Float alert for imminent
+  var imminent=appts.filter(function(a){var diff=timeToMin(a.hora)-nowM;return diff>0&&diff<=remMin});
+  if(imminent.length>0){
+    var a=imminent[0];
+    if(_lastFloatId!==a.id){
+      _lastFloatId=a.id;
+      var pn=a.pacienteNome||'';if(!pn){for(var i=0;i<pacs.length;i++){if(pacs[i].id===a.pacienteId){pn=pacs[i].nome;break}}}
+      var diff=timeToMin(a.hora)-nowM;
+      showFloatReminder(pn,a.proc+' · '+(a.profNome||'—'),diff+' min restante(s)');
+      // Bell ring animation
+      var bell=document.getElementById('reminder-bell');if(bell){bell.classList.add('ringing');setTimeout(function(){bell.classList.remove('ringing')},600)}
+    }
+  }
+}
+
+function renderReminderList(appts,nowM,pacs){
+  var el=document.getElementById('reminder-list');if(!el)return;
+  if(!appts.length){el.innerHTML='<div style="text-align:center;padding:24px;color:#90a4ae;font-size:12px"><i class="ti ti-bell-off" style="font-size:24px;display:block;margin-bottom:6px;opacity:.4"></i>Nenhuma consulta próxima</div>';return}
+  el.innerHTML=appts.map(function(a){
+    var pn=a.pacienteNome||'';if(!pn){for(var i=0;i<pacs.length;i++){if(pacs[i].id===a.pacienteId){pn=pacs[i].nome;break}}}
+    var diff=timeToMin(a.hora)-nowM;
+    var cls=diff<=5?'imminent':diff<=15?'urgent':'';
+    var cdCls=diff<=5?'red':diff<=15?'amber':'green';
+    return'<div class="reminder-item '+cls+'"><div class="ri-time">'+a.hora+'<small>'+(parseInt(a.duracao)||30)+' min</small></div><div class="ri-info"><div class="ri-name">'+pn+'</div><div class="ri-sub">'+a.proc+' · '+(a.profNome||'—')+' · '+a.sala+'</div></div><div class="ri-countdown '+cdCls+'">'+diff+' min</div></div>';
+  }).join('');
+}
+
+function toggleReminderPanel(){
+  var el=document.getElementById('reminder-panel');if(!el)return;
+  el.classList.toggle('open');
+  if(el.classList.contains('open'))checkReminders();
+}
+document.addEventListener('click',function(e){
+  var bell=document.getElementById('reminder-bell');
+  if(bell&&!bell.contains(e.target)){var p=document.getElementById('reminder-panel');if(p)p.classList.remove('open')}
+});
+
+function showFloatReminder(title,sub,time){
+  createFloatEl();
+  var el=document.getElementById('float-reminder');
+  document.getElementById('fr-title').textContent=title;
+  document.getElementById('fr-sub').textContent=sub;
+  document.getElementById('fr-time').textContent=time;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer=setTimeout(function(){el.classList.remove('show')},15000);
+}
+function closeFloatReminder(){var el=document.getElementById('float-reminder');if(el)el.classList.remove('show')}
+
+function saveReminderConfig(){
+  var v=(document.getElementById('reminder-minutes')||{}).value||'15';
+  try{localStorage.setItem('odonto_reminder_min',v)}catch(e){}
+  checkReminders();
+}
+function loadReminderConfig(){
+  try{var v=localStorage.getItem('odonto_reminder_min');if(v){var el=document.getElementById('reminder-minutes');if(el)el.value=v}}catch(e){}
+}
+
+// — Iniciar engine ao abrir app (hook no initApp original) —
+var _origInitApp=initApp;
+initApp=function(){
+  _origInitApp();
+  loadReminderConfig();
+  startReminderEngine();
+  updateConnUI();
+};
+
+// ══ FLUXO DE CAIXA + PARCELAMENTO ═══════════════
+
+// — Hook finTab para novas abas —
+var _origFinTab=finTab;
+finTab=function(btn,pane){_origFinTab(btn,pane);if(pane==='fluxocaixa')renderFluxoCaixa();if(pane==='parcelas')renderParcelas()};
+
+// — Hook openModal para popular selects do parcelamento —
+var _origOpenModal2=openModal;
+openModal=function(id){_origOpenModal2(id);if(id==='addParcela'){populateParcelaSelects();var d=document.getElementById('parc-inicio');if(d&&!d.value)d.value=today();calcParcelaPreview()}};
+
+function populateParcelaSelects(){
+  var pacs=DB.get('pacientes'),meds=DB.get('profissionais');
+  var nP='<option value="">— Selecionar —</option>';
+  var pEl=document.getElementById('parc-pac');if(pEl)pEl.innerHTML=nP+pacs.map(function(p){return'<option value="'+p.id+'">'+p.nome+'</option>'}).join('');
+  var mEl=document.getElementById('parc-prof');if(mEl)mEl.innerHTML=nP+meds.map(function(m){return'<option value="'+m.id+'">'+m.nome+'</option>'}).join('');
+}
+
+// — Fluxo de Caixa Projetado —
+function renderFluxoCaixa(){
+  var contas=DB.get('contas');var fin=DB.get('financeiro');
+  var td=today();var now=new Date(td+'T00:00:00');
+  function addDays(n){var d=new Date(now);d.setDate(d.getDate()+n);return d.toISOString().split('T')[0]}
+  var d30=addDays(30),d60=addDays(60),d90=addDays(90);
+  function calcPeriod(ate){
+    var recP=contas.filter(function(c){return c.tipo==='receber'&&c.status!=='pago'&&c.vencimento>=td&&c.vencimento<=ate}).reduce(function(s,c){return s+Number(c.val)},0);
+    var pagP=contas.filter(function(c){return c.tipo==='pagar'&&c.status!=='pago'&&c.vencimento>=td&&c.vencimento<=ate}).reduce(function(s,c){return s+Number(c.val)},0);
+    // Também considerar agendamentos futuros com valor como receita projetada
+    var agRec=DB.get('agendamentos').filter(function(a){return a.data>=td&&a.data<=ate&&Number(a.valor)>0&&a.status!=='Faltou'}).reduce(function(s,a){return s+Number(a.valor)},0);
+    return{rec:recP+agRec,desp:pagP,net:(recP+agRec)-pagP};
+  }
+  var p30=calcPeriod(d30),p60=calcPeriod(d60),p90=calcPeriod(d90);
+  var maxVal=Math.max(p90.rec,p90.desp,1);
+  // Render period cards
+  var pEl=document.getElementById('fc-periods');
+  if(pEl){
+    var periods=[{label:'Próximos 30 dias',data:p30},{label:'Próximos 60 dias',data:p60},{label:'Próximos 90 dias',data:p90}];
+    pEl.innerHTML=periods.map(function(p){
+      var netCls=p.data.net>=0?'pos':'neg';
+      return'<div class="fc-period"><div class="fc-period-label">'+p.label+'</div><div class="fc-bar-row"><div class="fc-bar-label">Receita</div><div class="fc-bar"><div class="fc-bar-fill income" style="width:'+Math.round(p.data.rec/maxVal*100)+'%"></div></div><div class="fc-bar-val pos">'+fmtMoney(p.data.rec)+'</div></div><div class="fc-bar-row"><div class="fc-bar-label">Despesas</div><div class="fc-bar"><div class="fc-bar-fill expense" style="width:'+Math.round(p.data.desp/maxVal*100)+'%"></div></div><div class="fc-bar-val neg">'+fmtMoney(p.data.desp)+'</div></div><div class="fc-net '+netCls+'">'+(p.data.net>=0?'+':'')+fmtMoney(p.data.net)+'</div><div class="fc-net-label">Saldo projetado</div></div>';
+    }).join('');
+  }
+  // Render visual bars (monthly breakdown)
+  var bEl=document.getElementById('fc-bars');
+  if(bEl){
+    var months={};
+    contas.filter(function(c){return c.status!=='pago'&&c.vencimento>=td&&c.vencimento<=d90}).forEach(function(c){
+      var m=(c.vencimento||'').slice(0,7);if(!months[m])months[m]={rec:0,desp:0};
+      if(c.tipo==='receber')months[m].rec+=Number(c.val);else months[m].desp+=Number(c.val);
+    });
+    DB.get('agendamentos').filter(function(a){return a.data>=td&&a.data<=d90&&Number(a.valor)>0&&a.status!=='Faltou'}).forEach(function(a){
+      var m=(a.data||'').slice(0,7);if(!months[m])months[m]={rec:0,desp:0};months[m].rec+=Number(a.valor);
+    });
+    var mKeys=Object.keys(months).sort();
+    var mMax=mKeys.reduce(function(mx,k){return Math.max(mx,months[k].rec,months[k].desp)},1);
+    var MN=['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    if(!mKeys.length){bEl.innerHTML='<div class="empty-state" style="padding:20px"><i class="ti ti-chart-bar"></i>Sem projeções</div>'}
+    else bEl.innerHTML=mKeys.map(function(k){var d=months[k];var parts=k.split('-');var label=MN[parseInt(parts[1])]+'/'+parts[0];return'<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:600;color:#1a237e;margin-bottom:6px">'+label+'</div><div class="fc-bar-row"><div class="fc-bar-label" style="color:#2e7d32">Receita</div><div class="fc-bar"><div class="fc-bar-fill income" style="width:'+Math.round(d.rec/mMax*100)+'%"></div></div><div class="fc-bar-val pos">'+fmtMoney(d.rec)+'</div></div><div class="fc-bar-row"><div class="fc-bar-label" style="color:#c62828">Despesa</div><div class="fc-bar"><div class="fc-bar-fill expense" style="width:'+Math.round(d.desp/mMax*100)+'%"></div></div><div class="fc-bar-val neg">'+fmtMoney(d.desp)+'</div></div></div>'}).join('');
+  }
+  // Timeline
+  var tEl=document.getElementById('fc-timeline');
+  if(tEl){
+    var items=contas.filter(function(c){return c.status!=='pago'&&c.vencimento>=td&&c.vencimento<=d90}).map(function(c){return{data:c.vencimento,desc:c.desc+(c.pacNome?' · '+c.pacNome:''),val:Number(c.val),tipo:c.tipo,cat:c.cat}}).sort(function(a,b){return a.data.localeCompare(b.data)});
+    if(!items.length)tEl.innerHTML='<div class="empty-state" style="padding:20px"><i class="ti ti-list"></i>Nenhum vencimento</div>';
+    else tEl.innerHTML=items.map(function(it){
+      var isRec=it.tipo==='receber';
+      var vencido=it.data<td;
+      return'<div class="fc-timeline-item"><div class="fc-tl-date"'+(vencido?' style="color:#c62828"':'')+'>'+fmtDate(it.data)+'</div><div class="fc-tl-desc">'+it.desc+'</div><span class="badge '+(isRec?'badge-green':'badge-red')+'" style="font-size:10px;margin-right:6px">'+(isRec?'Receber':'Pagar')+'</span><div class="fc-tl-val '+(isRec?'pos':'neg')+'">'+(isRec?'+':'-')+fmtMoney(it.val)+'</div></div>';
+    }).join('');
+  }
+}
+
+// — Parcelamento —
+function calcParcelaPreview(){
+  var total=parseFloat((document.getElementById('parc-valor')||{}).value)||0;
+  var qtd=parseInt((document.getElementById('parc-qtd')||{}).value)||6;
+  var entrada=parseFloat((document.getElementById('parc-entrada')||{}).value)||0;
+  var inicio=(document.getElementById('parc-inicio')||{}).value||today();
+  var pv=document.getElementById('parc-preview');if(!pv)return;
+  if(total<=0){pv.style.display='none';return}
+  var restante=total-entrada;if(restante<0)restante=0;
+  var valorParc=Math.round(restante/qtd*100)/100;
+  var ajuste=Math.round((restante-valorParc*qtd)*100)/100;
+  var html='<div style="font-weight:600;color:#1a237e;margin-bottom:8px"><i class="ti ti-receipt-2" style="margin-right:4px"></i>Prévia do Parcelamento</div>';
+  html+='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px"><span><b>Total:</b> '+fmtMoney(total)+'</span>';
+  if(entrada>0)html+='<span><b>Entrada:</b> '+fmtMoney(entrada)+'</span>';
+  html+='<span><b>Restante:</b> '+fmtMoney(restante)+'</span><span><b>'+qtd+'x</b> de '+fmtMoney(valorParc)+'</span></div>';
+  html+='<div style="max-height:180px;overflow-y:auto">';
+  var d=new Date(inicio+'T00:00:00');
+  if(entrada>0){html+='<div class="parc-item"><div class="parc-item-n pending">E</div><div style="flex:1">Entrada</div><div style="font-size:11px;color:#78909c">'+fmtDate(inicio)+'</div><div style="font-weight:600;min-width:80px;text-align:right">'+fmtMoney(entrada)+'</div></div>'}
+  for(var i=0;i<qtd;i++){
+    var dd=new Date(d);dd.setMonth(dd.getMonth()+i);var ds=dd.toISOString().split('T')[0];
+    var vp=valorParc+(i===qtd-1?ajuste:0);
+    html+='<div class="parc-item"><div class="parc-item-n pending">'+(i+1)+'</div><div style="flex:1">Parcela '+(i+1)+'/'+qtd+'</div><div style="font-size:11px;color:#78909c">'+fmtDate(ds)+'</div><div style="font-weight:600;min-width:80px;text-align:right">'+fmtMoney(vp)+'</div></div>';
+  }
+  html+='</div>';pv.innerHTML=html;pv.style.display='block';
+}
+
+function saveParcela(){
+  var pacId=(document.getElementById('parc-pac')||{}).value;
+  var profId=(document.getElementById('parc-prof')||{}).value;
+  var desc=(document.getElementById('parc-desc')||{}).value.trim();
+  var total=parseFloat((document.getElementById('parc-valor')||{}).value)||0;
+  var qtd=parseInt((document.getElementById('parc-qtd')||{}).value)||6;
+  var entrada=parseFloat((document.getElementById('parc-entrada')||{}).value)||0;
+  var inicio=(document.getElementById('parc-inicio')||{}).value;
+  if(!pacId){showNotif('Selecione o paciente','error');return}
+  if(!desc){showNotif('Informe a descrição','error');return}
+  if(total<=0){showNotif('Informe o valor total','error');return}
+  if(!inicio){showNotif('Informe o 1º vencimento','error');return}
+  var pacs=DB.get('pacientes');var pac=null;for(var i=0;i<pacs.length;i++){if(pacs[i].id===pacId){pac=pacs[i];break}}
+  var meds=DB.get('profissionais');var med=null;for(var j=0;j<meds.length;j++){if(meds[j].id===profId){med=meds[j];break}}
+  var grupoId=uid();
+  var restante=Math.max(total-entrada,0);
+  var valorParc=Math.round(restante/qtd*100)/100;
+  var ajuste=Math.round((restante-valorParc*qtd)*100)/100;
+  var list=DB.get('contas');
+  // Gerar entrada
+  if(entrada>0){
+    list.push({id:uid(),tipo:'receber',desc:desc+' (Entrada)',val:entrada,vencimento:inicio,cat:'Consulta',status:'pago',pacId:pacId,pacNome:pac?pac.nome:'',obs:'',parcelaGrupo:grupoId,parcelaN:0,parcelaTotal:qtd,parcelaDesc:desc,parcelaProfNome:med?med.nome:'',createdAt:today()});
+  }
+  // Gerar parcelas
+  var d=new Date(inicio+'T00:00:00');
+  for(var p=0;p<qtd;p++){
+    var dd=new Date(d);dd.setMonth(dd.getMonth()+p);var ds=dd.toISOString().split('T')[0];
+    var vp=valorParc+(p===qtd-1?ajuste:0);
+    list.push({id:uid(),tipo:'receber',desc:desc+' (Parc. '+(p+1)+'/'+qtd+')',val:vp,vencimento:ds,cat:'Consulta',status:'pendente',pacId:pacId,pacNome:pac?pac.nome:'',obs:'',parcelaGrupo:grupoId,parcelaN:p+1,parcelaTotal:qtd,parcelaDesc:desc,parcelaProfNome:med?med.nome:'',createdAt:today()});
+  }
+  DB.set('contas',list);
+  closeModal('addParcela');
+  // Reset form
+  ['parc-desc','parc-valor','parc-entrada'].forEach(function(id){var el=document.getElementById(id);if(el)el.value=''});
+  document.getElementById('parc-qtd').value='6';
+  document.getElementById('parc-preview').style.display='none';
+  addLog('create','Parcelamento criado',desc+' — '+qtd+'x — '+fmtMoney(total));
+  showNotif('Parcelamento gerado: '+qtd+' parcela(s)!','success');
+  renderParcelas();renderContas();
+}
+
+function renderParcelas(){
+  var contas=DB.get('contas');
+  // Agrupar por parcelaGrupo
+  var grupos={};
+  contas.filter(function(c){return c.parcelaGrupo}).forEach(function(c){
+    if(!grupos[c.parcelaGrupo])grupos[c.parcelaGrupo]={id:c.parcelaGrupo,desc:c.parcelaDesc||c.desc,pacNome:c.pacNome||'',profNome:c.parcelaProfNome||'',total:0,pago:0,items:[],qtd:c.parcelaTotal||0};
+    var g=grupos[c.parcelaGrupo];
+    g.total+=Number(c.val);
+    if(c.status==='pago')g.pago+=Number(c.val);
+    g.items.push(c);
+  });
+  var el=document.getElementById('parcelas-list');if(!el)return;
+  var gList=Object.values(grupos);
+  if(!gList.length){el.innerHTML='<div class="empty-state"><i class="ti ti-receipt-2"></i>Nenhum parcelamento cadastrado</div>';return}
+  el.innerHTML=gList.map(function(g){
+    g.items.sort(function(a,b){return(a.vencimento||'').localeCompare(b.vencimento||'')});
+    var pagas=g.items.filter(function(c){return c.status==='pago'}).length;
+    var totalItems=g.items.length;
+    var pct=totalItems>0?Math.round(pagas/totalItems*100):0;
+    return'<div class="parc-group"><div class="parc-group-head"><div style="width:44px;height:44px;border-radius:10px;background:#e3f2fd;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-receipt-2" style="font-size:20px;color:#1565C0"></i></div><div class="parc-group-info"><div class="parc-group-title">'+g.desc+'</div><div class="parc-group-sub">'+g.pacNome+(g.profNome?' · '+g.profNome:'')+'</div></div><div style="text-align:right"><div style="font-size:16px;font-weight:700;color:#1a237e">'+fmtMoney(g.total)+'</div><div style="font-size:11px;color:#2e7d32">Pago: '+fmtMoney(g.pago)+'</div></div></div><div class="parc-progress"><div class="parc-progress-fill" style="width:'+pct+'%"></div></div><div class="parc-stats"><span><b>'+pagas+'</b>/'+totalItems+' pagas</span><span><b>'+pct+'%</b> concluído</span><span>Restante: <b style="color:#e65100">'+fmtMoney(g.total-g.pago)+'</b></span></div><div class="parc-items">'+g.items.map(function(c){
+      var st=c.status==='pago'?'paid':(c.vencimento<today()?'overdue':'pending');
+      var stLabel=st==='paid'?'Pago':(st==='overdue'?'Vencido':'Pendente');
+      var stBadge=st==='paid'?'badge-green':(st==='overdue'?'badge-red':'badge-amber');
+      var n=c.parcelaN===0?'E':c.parcelaN;
+      return'<div class="parc-item"><div class="parc-item-n '+st+'">'+n+'</div><div style="flex:1;font-size:12px">'+c.desc+'</div><div style="font-size:11px;color:#78909c;min-width:70px">'+fmtDate(c.vencimento)+'</div><span class="badge '+stBadge+'" style="font-size:10px">'+stLabel+'</span><div style="font-weight:600;min-width:70px;text-align:right;font-size:12px">'+fmtMoney(c.val)+'</div>'+(st!=='paid'?'<button class="btn btn-success btn-sm" style="padding:3px 6px" onclick="pagarParcelaItem(\''+c.id+'\')" title="Pagar"><i class="ti ti-check"></i></button>':'')+'</div>';
+    }).join('')+'</div></div>';
+  }).join('');
+}
+
+function pagarParcelaItem(id){
+  var list=DB.get('contas');
+  for(var i=0;i<list.length;i++){if(list[i].id===id){list[i].status='pago';list[i].pagtoEm=today();break}}
+  DB.set('contas',list);showNotif('Parcela paga!','success');renderParcelas();renderContas();
+}
 
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
