@@ -3072,7 +3072,73 @@ renders.perfis = renderPerfis;
 renders.usuarios = renderUsuarios;
 renders.consultorios = renderConsultorios;
 
+// ══ TAREFAS — EDIÇÃO ══════════════════════════════════════
+// Inserir ANTES do auth.onAuthStateChanged
 
+var _editingTaskId = '';
+
+function editTask(id) {
+  var list = DB.get('tarefas');
+  var t = null;
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].id === id) { t = list[i]; break; }
+  }
+  if (!t) return;
+  _editingTaskId = id;
+  document.getElementById('task-desc').value = t.desc || '';
+  document.getElementById('task-pri').value = t.pri || 'Média';
+  document.getElementById('task-date').value = t.date || '';
+  openModal('addTask');
+  // Preencher paciente após o select ser populado
+  setTimeout(function() {
+    var pacEl = document.getElementById('task-pac');
+    if (pacEl && t.pacId) pacEl.value = t.pacId;
+  }, 50);
+}
+
+// — Override saveTask: suporte a criação e edição —
+var _origSaveTaskEdit = saveTask;
+saveTask = function() {
+  var desc = document.getElementById('task-desc').value.trim();
+  if (!desc) { showNotif('Descrição', 'error'); return; }
+
+  var list = DB.get('tarefas');
+
+  if (_editingTaskId) {
+    // Edição
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === _editingTaskId) {
+        list[i].desc = desc;
+        list[i].pri = document.getElementById('task-pri').value;
+        list[i].date = document.getElementById('task-date').value;
+        var pacEl = document.getElementById('task-pac');
+        if (pacEl) list[i].pacId = pacEl.value || '';
+        break;
+      }
+    }
+    DB.set('tarefas', list);
+    _editingTaskId = '';
+    closeModal('addTask');
+    showNotif('Tarefa atualizada!', 'success');
+  } else {
+    // Criação (comportamento original)
+    _origSaveTaskEdit();
+    return;
+  }
+
+  document.getElementById('task-desc').value = '';
+  renderTarefas();
+  renderDashboard();
+};
+
+// — Limpar estado de edição ao fechar modal —
+var _origCloseModalTask = closeModal;
+closeModal = function(id) {
+  _origCloseModalTask(id);
+  if (id === 'addTask') {
+    _editingTaskId = '';
+  }
+};
 
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
