@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',sans-serif;background:#f0f4f8;color:#1a1a2e;min-height:100vh}
@@ -925,7 +926,7 @@ textarea{resize:vertical;min-height:76px}
 
 <div class="modal-bg" id="modal-addExame"><div class="modal">
   <div class="modal-head"><h3><i class="ti ti-microscope" style="margin-right:6px"></i>Cadastrar Exame</h3><button class="modal-close" onclick="closeModal('addExame')"><i class="ti ti-x"></i></button></div>
-  <div class="form-grid"><div class="form-group span-2"><label>Paciente</label><select id="exam-pac"></select></div><div class="form-group"><label>Tipo</label><select id="exam-tipo"><option>Radiografia Panorâmica</option><option>Radiografia Periapical</option><option>Tomografia</option><option>Foto Intraoral</option><option>Modelo 3D</option><option>Outro</option></select></div><div class="form-group"><label>Data</label><input type="date" id="exam-data"></div><div class="form-group"><label>Arquivo</label><input type="text" id="exam-arquivo"></div><div class="form-group"><label>Tamanho</label><input type="text" id="exam-tamanho"></div><div class="form-group span-2"><label>Observações</label><textarea id="exam-obs" rows="2"></textarea></div></div>
+  <div class="form-grid"><div class="form-group span-2"><label>Paciente</label><select id="exam-pac"></select></div><div class="form-group"><label>Tipo</label><select id="exam-tipo"><option>Radiografia Panorâmica</option><option>Radiografia Periapical</option><option>Tomografia</option><option>Foto Intraoral</option><option>Modelo 3D</option><option>Outro</option></select></div><div class="form-group"><label>Data</label><input type="date" id="exam-data"></div><div class="form-group"><label>Nome do Arquivo</label><input type="text" id="exam-arquivo" placeholder="Preenchido ao anexar"></div><div class="form-group"><label>Anexar Exame</label><input type="file" id="exam-file" accept="image/*,.pdf" style="font-size:12px;padding:6px"><div id="exam-upload-info" style="font-size:11px;color:#78909c;margin-top:4px"></div></div><div class="form-group span-2"><label>Observações</label><textarea id="exam-obs" rows="2"></textarea></div></div>
   <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-outline" onclick="closeModal('addExame')">Cancelar</button><button class="btn btn-primary" onclick="saveExame()"><i class="ti ti-check"></i>Salvar</button></div>
 </div></div>
 
@@ -1532,14 +1533,24 @@ function flushOfflineQueue(){
 window.addEventListener('online',function(){_isOnline=true;updateConnUI();showSyncToast('ok','Conexão restabelecida!');setTimeout(flushOfflineQueue,1000)});
 window.addEventListener('offline',function(){_isOnline=false;updateConnUI();showSyncToast('err','Sem conexão — alterações serão salvas localmente')});
 
-// Override DB to queue when offline + auto-migrate old data
+// Override DB to queue when offline + auto-migrate old data + BACKUP localStorage
 var _origDBset=DB.set;
 DB.set=function(k,v){
-  var key=GLOBAL_KEYS.indexOf(k)>=0?k:(_currentClinicId?_currentClinicId+'_'+k:k);
+  var isGlobal=GLOBAL_KEYS.indexOf(k)>=0;
+  var key=isGlobal?k:(_currentClinicId?_currentClinicId+'_'+k:k);
   _cache['c_'+key]=v;
+  // Backup em localStorage
+  try{localStorage.setItem('odonto_bk_'+key,JSON.stringify(v))}catch(e){}
   if(_firestoreReady){
     if(_isOnline){
-      firestore.collection('app_data').doc(key).set({items:JSON.parse(JSON.stringify(v))}).catch(function(err){console.error('DB.set error:',err);_offlineQueue.push({type:'set',key:key,value:JSON.parse(JSON.stringify(v))});updateConnUI()});
+      firestore.collection('app_data').doc(key).set({items:JSON.parse(JSON.stringify(v))}).then(function(){
+        // Gravação confirmada
+      }).catch(function(err){
+        console.error('ERRO gravação Firestore ['+key+']:',err);
+        showNotif('Erro ao salvar '+k+' — tentando novamente...','error');
+        _offlineQueue.push({type:'set',key:key,value:JSON.parse(JSON.stringify(v))});
+        updateConnUI();
+      });
     }else{
       _offlineQueue.push({type:'set',key:key,value:JSON.parse(JSON.stringify(v))});
       updateConnUI();
@@ -1550,9 +1561,14 @@ var _origDBsetObj=DB.setObj;
 DB.setObj=function(k,v){
   var key=_currentClinicId?_currentClinicId+'_'+k:k;
   _cache['o_'+key]=v;
+  try{localStorage.setItem('odonto_bko_'+key,JSON.stringify(v))}catch(e){}
   if(_firestoreReady){
     if(_isOnline){
-      firestore.collection('app_objects').doc(key).set({value:JSON.parse(JSON.stringify(v))}).catch(function(err){console.error('DB.setObj error:',err);_offlineQueue.push({type:'setObj',key:key,value:JSON.parse(JSON.stringify(v))});updateConnUI()});
+      firestore.collection('app_objects').doc(key).set({value:JSON.parse(JSON.stringify(v))}).catch(function(err){
+        console.error('ERRO gravação obj ['+key+']:',err);
+        _offlineQueue.push({type:'setObj',key:key,value:JSON.parse(JSON.stringify(v))});
+        updateConnUI();
+      });
     }else{
       _offlineQueue.push({type:'setObj',key:key,value:JSON.parse(JSON.stringify(v))});
       updateConnUI();
@@ -1560,23 +1576,30 @@ DB.setObj=function(k,v){
   }
 };
 
-// Override DB.get/getObj with auto-migration from old (non-prefixed) format
+// Override DB.get/getObj with auto-migration + recovery from localStorage
 var _origDBget=DB.get;
 DB.get=function(k){
   var isGlobal=GLOBAL_KEYS.indexOf(k)>=0;
   var key=isGlobal?k:(_currentClinicId?_currentClinicId+'_'+k:k);
   var result=_cache['c_'+key]||[];
+  // Auto-migração de dados antigos sem prefixo
   if(result.length===0&&_currentClinicId&&!isGlobal){
     var oldData=_cache['c_'+k];
     if(oldData&&oldData.length>0){
-      _cache['c_'+key]=oldData;
-      result=oldData;
-      if(_firestoreReady){
-        firestore.collection('app_data').doc(key).set({items:JSON.parse(JSON.stringify(oldData))})
-          .then(function(){console.log('Auto-migrado: '+k+' → '+key)})
-          .catch(function(err){console.error('Erro migração:',err)});
-      }
+      _cache['c_'+key]=oldData;result=oldData;
+      if(_firestoreReady){firestore.collection('app_data').doc(key).set({items:JSON.parse(JSON.stringify(oldData))}).catch(function(e){console.error('Migração:',e)})}
     }
+  }
+  // Recovery de localStorage se Firestore retornou vazio
+  if(result.length===0){
+    try{
+      var bk=localStorage.getItem('odonto_bk_'+key);
+      if(bk){var parsed=JSON.parse(bk);if(parsed&&parsed.length>0){
+        _cache['c_'+key]=parsed;result=parsed;
+        console.warn('RECOVERY ['+key+']: restaurado do localStorage ('+parsed.length+' itens)');
+        if(_firestoreReady){firestore.collection('app_data').doc(key).set({items:JSON.parse(JSON.stringify(parsed))}).then(function(){console.log('Recovery gravado no Firestore: '+key)}).catch(function(e){console.error('Recovery write err:',e)})}
+      }}
+    }catch(e){}
   }
   try{return JSON.parse(JSON.stringify(result))}catch(e){return[]}
 };
@@ -1585,17 +1608,16 @@ DB.getObj=function(k,d){
   d=d||{};
   var key=_currentClinicId?_currentClinicId+'_'+k:k;
   var val=_cache['o_'+key];
+  // Auto-migração
   if(val===undefined&&_currentClinicId){
     var oldVal=_cache['o_'+k];
-    if(oldVal!==undefined){
-      _cache['o_'+key]=oldVal;
-      val=oldVal;
-      if(_firestoreReady){
-        firestore.collection('app_objects').doc(key).set({value:JSON.parse(JSON.stringify(oldVal))})
-          .then(function(){console.log('Auto-migrado obj: '+k+' → '+key)})
-          .catch(function(err){console.error('Erro migração obj:',err)});
-      }
+    if(oldVal!==undefined){_cache['o_'+key]=oldVal;val=oldVal;
+      if(_firestoreReady){firestore.collection('app_objects').doc(key).set({value:JSON.parse(JSON.stringify(oldVal))}).catch(function(e){console.error('Migração obj:',e)})}
     }
+  }
+  // Recovery de localStorage
+  if(val===undefined){
+    try{var bk=localStorage.getItem('odonto_bko_'+key);if(bk){var parsed=JSON.parse(bk);if(parsed&&Object.keys(parsed).length>0){_cache['o_'+key]=parsed;val=parsed;console.warn('RECOVERY obj ['+key+']')}}}catch(e){}
   }
   return val!==undefined?val:d;
 };
@@ -2550,6 +2572,242 @@ closeModal=function(id){
   }
 };
 
+// ══ OVERRIDES COMPLETOS COM BOTÕES ══════════════
+renderDocumentos=function(){
+  var list=DB.get('documentos').sort(function(a,b){return(b.data||'').localeCompare(a.data||'')});
+  var el=document.getElementById('docs-list');if(!el)return;
+  if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-file-off"></i>Nenhum documento</div>';return}
+  el.innerHTML='<table><thead><tr><th>Tipo</th><th>Paciente</th><th>Prof.</th><th>Data</th><th></th></tr></thead><tbody>'+list.map(function(d){
+    return'<tr><td><span class="badge badge-blue">'+d.tipo+'</span></td><td>'+d.pacienteNome+'</td><td>'+(d.medicoNome||'—')+'</td><td>'+fmtDate(d.data)+'</td><td style="display:flex;gap:4px"><button class="btn btn-primary btn-sm" onclick="viewDocumento(\''+d.id+'\')" title="Visualizar PDF"><i class="ti ti-eye"></i></button><button class="btn btn-danger btn-sm" onclick="deleteDocumento(\''+d.id+'\')"><i class="ti ti-trash"></i></button></td></tr>'
+  }).join('')+'</tbody></table>';
+};
+
+renderTarefas=function(){
+  var pri=(document.getElementById('filter-task-pri')||{}).value||'';
+  var all=DB.get('tarefas').filter(function(t){return!pri||t.pri===pri});
+  var PC={Alta:'p-high',Média:'p-med',Baixa:'p-low'};
+  var mk=function(t){return'<div class="task-item'+(t.done?' done':'')+'"><div class="priority '+(PC[t.pri]||'p-low')+'"></div><div class="task-check'+(t.done?' checked':'')+'" onclick="toggleTask(\''+t.id+'\')">'+(t.done?'<i class="ti ti-check" style="font-size:11px"></i>':'')+'</div><div class="task-text">'+t.desc+'</div>'+(t.date?'<div class="task-date">'+fmtDate(t.date)+'</div>':'')+'<button class="btn btn-outline btn-sm" onclick="editTask(\''+t.id+'\')" title="Editar"><i class="ti ti-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteTask(\''+t.id+'\')"><i class="ti ti-trash"></i></button></div>'};
+  document.getElementById('tasks-pending').innerHTML=all.filter(function(t){return!t.done}).map(mk).join('')||'<div class="empty-state"><i class="ti ti-circle-check"></i>Nenhuma</div>';
+  document.getElementById('tasks-done').innerHTML=all.filter(function(t){return t.done}).map(mk).join('')||'<div class="empty-state"><i class="ti ti-checkbox"></i>Nenhuma</div>';
+};
+
+renderExames=function(){
+  var q=(document.getElementById('search-exame').value||'').toLowerCase();
+  var tipo=(document.getElementById('filter-exame-tipo')||{}).value||'';
+  var list=DB.get('exames').filter(function(e){return(!q||(e.pacienteNome||'').toLowerCase().indexOf(q)>=0)&&(!tipo||e.tipo===tipo)}).sort(function(a,b){return(b.data||'').localeCompare(a.data||'')});
+  var el=document.getElementById('exames-list');if(!el)return;
+  if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-microscope"></i>Nenhum exame</div>';return}
+  el.innerHTML='<table><thead><tr><th>Paciente</th><th>Tipo</th><th>Data</th><th>Arquivo</th><th></th></tr></thead><tbody>'+list.map(function(e){
+    var vBtn=e.fileUrl?'<button class="btn btn-primary btn-sm" onclick="window.open(\''+e.fileUrl.replace(/'/g,"\\'")+'\',\'_blank\')" title="Visualizar"><i class="ti ti-eye"></i></button>':'';
+    return'<tr><td>'+e.pacienteNome+'</td><td><span class="badge badge-blue">'+e.tipo+'</span></td><td>'+fmtDate(e.data)+'</td><td>'+(e.arquivo||'—')+'</td><td style="display:flex;gap:4px">'+vBtn+'<button class="btn btn-danger btn-sm" onclick="deleteExame(\''+e.id+'\')"><i class="ti ti-trash"></i></button></td></tr>'
+  }).join('')+'</tbody></table>';
+};
+
+// ── Sync renders map ──
+renders.dashboard=renderDashboard;
+renders.documentos=renderDocumentos;
+renders.tarefas=renderTarefas;
+renders.exames=renderExames;
+renders.usuarios=renderUsuarios;
+renders.perfis=renderPerfis;
+renders.relatorios=function(){var rp=document.getElementById('rel-prof');if(rp){var meds=DB.get('profissionais');rp.innerHTML='<option value="">Todos</option>'+meds.map(function(m){return'<option value="'+m.id+'">'+m.nome+'</option>'}).join('')}gerarRelatorio('atual')};
+renders.financeiro=function(){renderFinanceiro();renderContas()};
+
+// ── Verificação de saúde dos dados após login ──
+function dataHealthCheck(){
+  if(!currentUser)return;
+  var checks=[
+    {k:'usuarios',label:'Usuários',global:true},
+    {k:'perfis',label:'Perfis',global:true},
+    {k:'consultorios',label:'Consultórios',global:true},
+    {k:'pacientes',label:'Pacientes'},
+    {k:'agendamentos',label:'Agendamentos'},
+    {k:'financeiro',label:'Financeiro'},
+    {k:'profissionais',label:'Profissionais'},
+    {k:'tarefas',label:'Tarefas'},
+    {k:'estoque',label:'Estoque'}
+  ];
+  var recovered=0;var total=0;
+  checks.forEach(function(c){
+    var data=DB.get(c.k);total+=data.length;
+  });
+  // Verificar se dados globais existem
+  var usuarios=DB.get('usuarios');
+  var perfis=DB.get('perfis');
+  if(!usuarios.length){
+    console.error('ALERTA: Nenhum usuário no sistema! Possível perda de dados.');
+    showNotif('Atenção: verificando integridade dos dados...','error');
+  }
+  if(!perfis.length){
+    initDefaults();
+    console.warn('Perfis recriados via initDefaults');
+  }
+  console.log('Health Check: '+total+' registros carregados | Usuários: '+usuarios.length+' | Clínica: '+(_currentClinicId||'nenhuma'));
+}
+
+// ── Override initApp final ──
+var _origInitAppFinal=initApp;
+initApp=function(){
+  _origInitAppFinal();
+  dataHealthCheck();
+};
+
+// ══ CORREÇÃO: Função faltante que causava o erro de login ══
+// Inserir ANTES do bloco "(function(){" do safeguard (linha ~2655)
+
+function getEffectiveClinicId() {
+  // Se já tem clinicId definido, usa ele
+  if (_currentClinicId) return _currentClinicId;
+  // Se tem usuário logado com consultório atribuído, usa o dele
+  if (currentUser && currentUser.consultorioId) return currentUser.consultorioId;
+  // Caso contrário (login inicial, master sem clínica), retorna vazio
+  return '';
+}
+
+// ── Safeguard: garantir clinicId nunca vazio em operações DB ──
+(function(){
+  var _fGet=DB.get,_fSet=DB.set,_fGO=DB.getObj,_fSO=DB.setObj;
+  DB.get=function(k){var o=_currentClinicId;if(!o)_currentClinicId=getEffectiveClinicId();var r=_fGet(k);_currentClinicId=o;return r};
+  DB.set=function(k,v){var o=_currentClinicId;if(!o)_currentClinicId=getEffectiveClinicId();_fSet(k,v);_currentClinicId=o};
+  DB.getObj=function(k,d){var o=_currentClinicId;if(!o)_currentClinicId=getEffectiveClinicId();var r=_fGO(k,d);_currentClinicId=o;return r};
+  DB.setObj=function(k,v){var o=_currentClinicId;if(!o)_currentClinicId=getEffectiveClinicId();_fSO(k,v);_currentClinicId=o};
+})();
+
+// ══ PERFIS DE ACESSO — REGRAS DE VISIBILIDADE E EDIÇÃO ══════
+// Inserir ANTES do auth.onAuthStateChanged
+//
+// Regras:
+// • Master Admin  → visualiza, edita e exclui TODOS os perfis
+// • Administrador → visualiza e edita APENAS dentista, recepcionista, financeiro
+//                   NÃO vê master nem admin, NÃO exclui nenhum
+// • Demais        → sem acesso (menu oculto + seção bloqueada)
+// ═══════════════════════════════════════════════════════════════
+
+// IDs dos perfis restritos (só Master enxerga)
+var PERFIS_RESTRITOS = ['master', 'admin'];
+
+// Helpers de papel
+function isAdmin() {
+  return currentUser && !currentUser.masterAdmin && currentUser.perfil === 'admin';
+}
+
+// — Override applyPermissions: controlar visibilidade do menu —
+var _origApplyPermsPerfis2 = applyPermissions;
+applyPermissions = function() {
+  _origApplyPermsPerfis2();
+  var perfisLink = document.querySelector('nav a[data-section="perfis"]');
+  if (perfisLink) {
+    // Visível apenas para Master ou Admin
+    perfisLink.style.display = (isMaster() || isAdmin()) ? 'flex' : 'none';
+  }
+};
+
+// — Override goTo: bloquear navegação direta para demais usuários —
+var _origGoToPerfis2 = goTo;
+goTo = function(id, el) {
+  if (id === 'perfis' && !isMaster() && !isAdmin()) {
+    showNotif('Acesso restrito', 'error');
+    return;
+  }
+  _origGoToPerfis2(id, el);
+};
+
+// — Override renderPerfis: aplicar regras por papel —
+var _origRenderPerfisR2 = renderPerfis;
+renderPerfis = function() {
+  var el = document.getElementById('perfis-list');
+  var actionsRow = document.querySelector('#section-perfis .actions-row');
+
+  // ── Demais usuários: acesso negado ──
+  if (!isMaster() && !isAdmin()) {
+    if (el) {
+      el.innerHTML = '<div class="access-denied"><i class="ti ti-lock"></i>' +
+        '<div style="font-size:16px;font-weight:600;color:#c62828">Acesso Negado</div>' +
+        '<div style="font-size:13px;color:#78909c;margin-top:6px">Você não tem permissão para acessar esta seção.</div></div>';
+    }
+    if (actionsRow) actionsRow.style.display = 'none';
+    return;
+  }
+
+  // ── Master: acesso total (renderiza tudo) ──
+  if (isMaster()) {
+    if (actionsRow) actionsRow.style.display = 'flex';
+    _origRenderPerfisR2();
+    return;
+  }
+
+  // ── Administrador: apenas dentista, recepcionista, financeiro ──
+  // Esconder botão "Novo Perfil" (Admin não cria perfis)
+  if (actionsRow) actionsRow.style.display = 'none';
+
+  var list = DB.get('perfis').filter(function(p) {
+    return PERFIS_RESTRITOS.indexOf(p.id) < 0;
+  });
+
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><i class="ti ti-shield"></i>Nenhum perfil disponível</div>';
+    return;
+  }
+
+  el.innerHTML = list.map(function(p) {
+    var tags = (p.perms || []).map(function(s) {
+      var sc = null;
+      for (var i = 0; i < ALL_SECTIONS.length; i++) {
+        if (ALL_SECTIONS[i].id === s) { sc = ALL_SECTIONS[i]; break; }
+      }
+      return sc ? '<span class="tag badge-blue">' + sc.label + '</span>' : '';
+    }).join('');
+
+    // Admin: só botão editar, NUNCA excluir
+    return '<div class="card" style="margin:0">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
+        '<div style="width:40px;height:40px;border-radius:10px;background:#e3f2fd;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+          '<i class="ti ti-shield-check" style="font-size:20px;color:#1565C0"></i>' +
+        '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:13px;font-weight:600;color:#1a237e">' + p.nome + '</div>' +
+          '<div style="font-size:11px;color:#78909c">' + (p.desc || '—') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:4px">' +
+          '<button class="btn btn-outline btn-sm" onclick="editPerfil(\'' + p.id + '\')"><i class="ti ti-edit"></i></button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px">' + tags + '</div>' +
+    '</div>';
+  }).join('');
+};
+
+// — Override editPerfil: Admin não pode editar perfis restritos —
+var _origEditPerfilR2 = editPerfil;
+editPerfil = function(id) {
+  // Admin tentando editar perfil restrito → bloqueia
+  if (isAdmin() && PERFIS_RESTRITOS.indexOf(id) >= 0) {
+    showNotif('Sem permissão para editar este perfil', 'error');
+    return;
+  }
+  _origEditPerfilR2(id);
+};
+
+// — Override deletePerfil: Admin não pode excluir nenhum perfil —
+var _origDeletePerfilR2 = deletePerfil;
+deletePerfil = function(id) {
+  if (isAdmin()) {
+    showNotif('Apenas o Administrador Master pode excluir perfis', 'error');
+    return;
+  }
+  _origDeletePerfilR2(id);
+};
+
+// — Override savePerfil: Admin não pode alterar perfis restritos —
+var _origSavePerfilR2 = savePerfil;
+savePerfil = function() {
+  var editId = document.getElementById('prf-edit-id').value;
+  if (isAdmin() && editId && PERFIS_RESTRITOS.indexOf(editId) >= 0) {
+    showNotif('Sem permissão para alterar este perfil', 'error');
+    return;
+  }
+  _origSavePerfilR2();
+};
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
   if(authUser){setLoginLoading(true);enterApp(authUser)}
