@@ -2673,47 +2673,198 @@ function getEffectiveClinicId() {
   DB.setObj=function(k,v){var o=_currentClinicId;if(!o)_currentClinicId=getEffectiveClinicId();_fSO(k,v);_currentClinicId=o};
 })();
 
-// ══ PERFIS DE ACESSO — REGRAS DE VISIBILIDADE E EDIÇÃO ══════
+// ═══════════════════════════════════════════════════════════════
+// ══ CORREÇÃO DE SEGURANÇA — ISOLAMENTO DE DADOS POR CONSULTÓRIO
+// ══ + PERFIS DE ACESSO — REGRAS DE VISIBILIDADE E EDIÇÃO
+// ═══════════════════════════════════════════════════════════════
 // Inserir ANTES do auth.onAuthStateChanged
 //
-// Regras:
-// • Master Admin  → visualiza, edita e exclui TODOS os perfis
-// • Administrador → visualiza e edita APENAS dentista, recepcionista, financeiro
-//                   NÃO vê master nem admin, NÃO exclui nenhum
+// REGRAS DE ISOLAMENTO:
+// • Administrador Master → vê e altera dados de TODOS os consultórios
+// • Demais usuários      → veem APENAS dados do consultório associado
+//                          _currentClinicId SEMPRE travado no seu consultório
+//
+// REGRAS DE PERFIS DE ACESSO:
+// • Master Admin  → visualiza, edita e exclui TODOS os perfis, cria novos
+// • Administrador → visualiza e edita APENAS dentista/recepcionista/financeiro
+//                   NÃO vê master nem admin, NÃO exclui, NÃO cria
 // • Demais        → sem acesso (menu oculto + seção bloqueada)
 // ═══════════════════════════════════════════════════════════════
 
-// IDs dos perfis restritos (só Master enxerga)
+// ── Constantes e Helpers ──
 var PERFIS_RESTRITOS = ['master', 'admin'];
 
-// Helpers de papel
 function isAdmin() {
   return currentUser && !currentUser.masterAdmin && currentUser.perfil === 'admin';
 }
 
-// — Override applyPermissions: controlar visibilidade do menu —
-var _origApplyPermsPerfis2 = applyPermissions;
+// ═══════════════════════════════════════════
+// PARTE 1: ISOLAMENTO DE DADOS POR CONSULTÓRIO
+// ═══════════════════════════════════════════
+
+// — Fix getEffectiveClinicId: nunca retornar '' para não-master —
+getEffectiveClinicId = function() {
+  // Se já tem clinicId definido na sessão, usa
+  if (_currentClinicId) return _currentClinicId;
+  // Se tem usuário logado com consultório, usa o dele
+  if (currentUser && currentUser.consultorioId) return currentUser.consultorioId;
+  // Master sem clínica selecionada → '' é válido (vê tudo)
+  if (currentUser && currentUser.masterAdmin) return '';
+  // Não-master sem clínica → retorna placeholder que impede acesso a dados globais
+  return '__sem_consultorio__';
+};
+
+// — Override enterApp: travar _currentClinicId para não-master —
+var _origEnterAppSec = enterApp;
+enterApp = function(authUser, regName) {
+  return _origEnterAppSec(authUser, regName).then(function() {
+    // Após login bem-sucedido, forçar isolamento
+    if (currentUser && !currentUser.masterAdmin) {
+      // Não-master: SEMPRE travado no seu consultório
+      _currentClinicId = currentUser.consultorioId || '__sem_consultorio__';
+      // Remover flag todosConsultorios se não for master (segurança)
+      if (currentUser.todosConsultorios) {
+        currentUser.todosConsultorios = false;
+        var usuarios = DB.get('usuarios');
+        for (var i = 0; i < usuarios.length; i++) {
+          if (usuarios[i].id === currentUser.id) {
+            usuarios[i].todosConsultorios = false;
+            break;
+          }
+        }
+        DB.set('usuarios', usuarios);
+      }
+    }
+  }).catch(function(err) {
+    // Se enterApp original não retornou Promise (tela pending/erro)
+    // ainda assim travar o clinicId
+    if (currentUser && !currentUser.masterAdmin) {
+      _currentClinicId = currentUser.consultorioId || '__sem_consultorio__';
+    }
+  });
+};
+
+// — Override switchClinic: APENAS Master pode trocar consultório —
+var _origSwitchClinicSec = switchClinic;
+switchClinic = function(clinicId) {
+  if (!isMaster()) {
+    showNotif('Apenas o Administrador Master pode trocar de consultório', 'error');
+    // Restaurar select para o consultório real do usuário
+    var sel = document.getElementById('clinic-selector');
+    if (sel) sel.value = currentUser ? currentUser.consultorioId || '' : '';
+    return;
+  }
+  _origSwitchClinicSec(clinicId);
+};
+
+// — Override populateClinicSelector: APENAS Master vê o seletor —
+populateClinicSelector = function() {
+  var sel = document.getElementById('clinic-selector');
+  if (!sel) return;
+  // Somente Master visualiza o seletor de consultório
+  if (!isMaster()) {
+    sel.style.display = 'none';
+    return;
+  }
+  var clinics = DB.get('consultorios');
+  if (!clinics.length) { sel.style.display = 'none'; return; }
+  sel.style.display = 'inline-block';
+  var cur = _currentClinicId;
+  sel.innerHTML = '<option value="">— Todos Consultórios —</option>' +
+    clinics.map(function(c) {
+      return '<option value="' + c.id + '"' + (c.id === cur ? ' selected' : '') + '>' + c.nome + '</option>';
+    }).join('');
+};
+
+// — Proteção: impedir que _currentClinicId seja alterado por não-master —
+// Intercepta qualquer tentativa de mudar via console ou código externo
+(function() {
+  var _checkClinicLock = setInterval(function() {
+    if (!currentUser || currentUser.masterAdmin) return;
+    var expected = currentUser.consultorioId || '__sem_consultorio__';
+    if (_currentClinicId !== expected) {
+      console.warn('SEGURANÇA: _currentClinicId alterado indevidamente. Restaurando de "' +
+        _currentClinicId + '" para "' + expected + '"');
+      _currentClinicId = expected;
+    }
+  }, 3000);
+
+  // Limpar intervalo no logout
+  var _origDoLogoutSec = doLogout;
+  doLogout = function() {
+    clearInterval(_checkClinicLock);
+    _origDoLogoutSec();
+  };
+})();
+
+
+// ═══════════════════════════════════════════
+// PARTE 2: PERFIS DE ACESSO — REGRAS DE VISIBILIDADE
+// ═══════════════════════════════════════════
+
+// — Override canAccess: forçar regra de perfis —
+var _origCanAccessSec = canAccess;
+canAccess = function(s) {
+  // Seção 'perfis': apenas Master e Admin
+  if (s === 'perfis') {
+    return isMaster() || isAdmin();
+  }
+  // Seção 'consultorios': apenas Master
+  if (s === 'consultorios') {
+    return isMaster();
+  }
+  return _origCanAccessSec(s);
+};
+
+// — Override applyPermissions: esconder menus conforme regras —
+var _origApplyPermsPerfis3 = applyPermissions;
 applyPermissions = function() {
-  _origApplyPermsPerfis2();
+  _origApplyPermsPerfis3();
+
+  // Perfis de Acesso: apenas Master e Admin
   var perfisLink = document.querySelector('nav a[data-section="perfis"]');
   if (perfisLink) {
-    // Visível apenas para Master ou Admin
     perfisLink.style.display = (isMaster() || isAdmin()) ? 'flex' : 'none';
+  }
+
+  // Consultórios: apenas Master
+  var cltLink = document.querySelector('nav a[data-section="consultorios"]');
+  if (cltLink) {
+    cltLink.style.display = isMaster() ? 'flex' : 'none';
+  }
+
+  // Seletor de consultório: apenas Master
+  populateClinicSelector();
+
+  // Sidebar: mostrar consultório associado (não-master) ou "Todos" (master)
+  var sbC = document.getElementById('sb-clinic');
+  if (sbC && currentUser) {
+    if (isMaster()) {
+      sbC.textContent = _currentClinicId
+        ? (currentUser.consultorioNome || 'Consultório')
+        : 'Todos os Consultórios (Master)';
+    } else {
+      sbC.textContent = currentUser.consultorioNome || 'Sem consultório';
+    }
   }
 };
 
-// — Override goTo: bloquear navegação direta para demais usuários —
-var _origGoToPerfis2 = goTo;
+// — Override goTo: bloquear navegação para perfis e consultórios —
+var _origGoToPerfis3 = goTo;
 goTo = function(id, el) {
   if (id === 'perfis' && !isMaster() && !isAdmin()) {
     showNotif('Acesso restrito', 'error');
     return;
   }
-  _origGoToPerfis2(id, el);
+  if (id === 'consultorios' && !isMaster()) {
+    showNotif('Acesso restrito ao Administrador Master', 'error');
+    return;
+  }
+  _origGoToPerfis3(id, el);
 };
 
 // — Override renderPerfis: aplicar regras por papel —
-var _origRenderPerfisR2 = renderPerfis;
+var _origRenderPerfisR3 = renderPerfis;
 renderPerfis = function() {
   var el = document.getElementById('perfis-list');
   var actionsRow = document.querySelector('#section-perfis .actions-row');
@@ -2723,21 +2874,21 @@ renderPerfis = function() {
     if (el) {
       el.innerHTML = '<div class="access-denied"><i class="ti ti-lock"></i>' +
         '<div style="font-size:16px;font-weight:600;color:#c62828">Acesso Negado</div>' +
-        '<div style="font-size:13px;color:#78909c;margin-top:6px">Você não tem permissão para acessar esta seção.</div></div>';
+        '<div style="font-size:13px;color:#78909c;margin-top:6px">' +
+        'Você não tem permissão para acessar esta seção.</div></div>';
     }
     if (actionsRow) actionsRow.style.display = 'none';
     return;
   }
 
-  // ── Master: acesso total (renderiza tudo) ──
+  // ── Master: acesso total ──
   if (isMaster()) {
     if (actionsRow) actionsRow.style.display = 'flex';
-    _origRenderPerfisR2();
+    _origRenderPerfisR3();
     return;
   }
 
   // ── Administrador: apenas dentista, recepcionista, financeiro ──
-  // Esconder botão "Novo Perfil" (Admin não cria perfis)
   if (actionsRow) actionsRow.style.display = 'none';
 
   var list = DB.get('perfis').filter(function(p) {
@@ -2758,10 +2909,11 @@ renderPerfis = function() {
       return sc ? '<span class="tag badge-blue">' + sc.label + '</span>' : '';
     }).join('');
 
-    // Admin: só botão editar, NUNCA excluir
+    // Admin: apenas botão editar (sem excluir, sem criar)
     return '<div class="card" style="margin:0">' +
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
-        '<div style="width:40px;height:40px;border-radius:10px;background:#e3f2fd;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+        '<div style="width:40px;height:40px;border-radius:10px;background:#e3f2fd;' +
+        'display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
           '<i class="ti ti-shield-check" style="font-size:20px;color:#1565C0"></i>' +
         '</div>' +
         '<div style="flex:1;min-width:0">' +
@@ -2769,7 +2921,8 @@ renderPerfis = function() {
           '<div style="font-size:11px;color:#78909c">' + (p.desc || '—') + '</div>' +
         '</div>' +
         '<div style="display:flex;gap:4px">' +
-          '<button class="btn btn-outline btn-sm" onclick="editPerfil(\'' + p.id + '\')"><i class="ti ti-edit"></i></button>' +
+          '<button class="btn btn-outline btn-sm" onclick="editPerfil(\'' + p.id + '\')">' +
+            '<i class="ti ti-edit"></i></button>' +
         '</div>' +
       '</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px">' + tags + '</div>' +
@@ -2777,37 +2930,150 @@ renderPerfis = function() {
   }).join('');
 };
 
-// — Override editPerfil: Admin não pode editar perfis restritos —
-var _origEditPerfilR2 = editPerfil;
+// — Override editPerfil: Admin não edita perfis restritos —
+var _origEditPerfilR3 = editPerfil;
 editPerfil = function(id) {
-  // Admin tentando editar perfil restrito → bloqueia
+  if (!isMaster() && !isAdmin()) {
+    showNotif('Sem permissão', 'error');
+    return;
+  }
   if (isAdmin() && PERFIS_RESTRITOS.indexOf(id) >= 0) {
     showNotif('Sem permissão para editar este perfil', 'error');
     return;
   }
-  _origEditPerfilR2(id);
+  _origEditPerfilR3(id);
 };
 
-// — Override deletePerfil: Admin não pode excluir nenhum perfil —
-var _origDeletePerfilR2 = deletePerfil;
+// — Override deletePerfil: apenas Master exclui —
+var _origDeletePerfilR3 = deletePerfil;
 deletePerfil = function(id) {
-  if (isAdmin()) {
+  if (!isMaster()) {
     showNotif('Apenas o Administrador Master pode excluir perfis', 'error');
     return;
   }
-  _origDeletePerfilR2(id);
+  _origDeletePerfilR3(id);
 };
 
-// — Override savePerfil: Admin não pode alterar perfis restritos —
-var _origSavePerfilR2 = savePerfil;
+// — Override savePerfil: Admin não salva perfis restritos —
+var _origSavePerfilR3 = savePerfil;
 savePerfil = function() {
+  // Demais: sem permissão
+  if (!isMaster() && !isAdmin()) {
+    showNotif('Sem permissão', 'error');
+    return;
+  }
   var editId = document.getElementById('prf-edit-id').value;
+  // Admin não pode criar novos perfis (editId vazio = novo)
+  if (isAdmin() && !editId) {
+    showNotif('Apenas o Administrador Master pode criar perfis', 'error');
+    return;
+  }
+  // Admin não pode salvar perfis restritos
   if (isAdmin() && editId && PERFIS_RESTRITOS.indexOf(editId) >= 0) {
     showNotif('Sem permissão para alterar este perfil', 'error');
     return;
   }
-  _origSavePerfilR2();
+  _origSavePerfilR3();
 };
+
+
+// ═══════════════════════════════════════════
+// PARTE 3: REFORÇO NO ISOLAMENTO DE USUÁRIOS
+// ═══════════════════════════════════════════
+
+// — Override renderUsuarios: não-master vê APENAS seu consultório —
+var _origRenderUsrSec = renderUsuarios;
+renderUsuarios = function() {
+  // Chamar a versão original (que já tem lógica de agrupamento)
+  _origRenderUsrSec();
+
+  // Após renderizar, se não é master, esconder filtro de consultório
+  if (!isMaster()) {
+    var fcEl = document.getElementById('usr-filter-clinic');
+    if (fcEl) fcEl.style.display = 'none';
+    var ufr = document.getElementById('usr-filter-row');
+    // Manter visível apenas filtro de status para admin
+    if (ufr && isAdmin()) {
+      ufr.style.display = 'flex';
+      if (fcEl) fcEl.style.display = 'none';
+    }
+  }
+};
+
+// — Override editUsuario: Admin não altera consultório nem aprova —
+var _origEditUsrSec = editUsuario;
+editUsuario = function(id) {
+  _origEditUsrSec(id);
+  // Após abrir modal, aplicar restrições extras
+  setTimeout(function() {
+    if (!isMaster() && isAdmin()) {
+      // Admin: travar consultório no seu próprio
+      var cEl = document.getElementById('usr-consultorio');
+      if (cEl) { cEl.value = currentUser.consultorioId || ''; cEl.disabled = true; }
+      // Admin: não pode aprovar/desaprovar
+      var aEl = document.getElementById('usr-aprovado');
+      if (aEl) aEl.disabled = true;
+      // Admin: não pode atribuir perfil master ou admin
+      var pEl = document.getElementById('usr-perfil');
+      if (pEl) {
+        var opts = pEl.querySelectorAll('option');
+        opts.forEach(function(o) {
+          if (o.value === 'master' || o.value === 'admin') o.style.display = 'none';
+        });
+      }
+      // Remover opção "Todos os Consultórios"
+      var todosOpt = document.querySelector('#usr-consultorio option[value="__todos__"]');
+      if (todosOpt) todosOpt.style.display = 'none';
+    }
+  }, 80);
+};
+
+// — Override saveUsuario: não-master não pode alterar consultório —
+var _origSaveUsrSec = saveUsuario;
+saveUsuario = function() {
+  if (!isMaster() && !isAdmin()) {
+    showNotif('Sem permissão para editar usuários', 'error');
+    return;
+  }
+  // Admin: forçar consultório próprio (não confiar no campo desabilitado)
+  if (isAdmin() && !isMaster()) {
+    var cEl = document.getElementById('usr-consultorio');
+    if (cEl) cEl.value = currentUser.consultorioId || '';
+  }
+  _origSaveUsrSec();
+};
+
+// — Override aprovarUsuario: apenas Master aprova —
+var _origAprovarUsrSec = aprovarUsuario;
+aprovarUsuario = function(id) {
+  if (!isMaster()) {
+    showNotif('Apenas o Administrador Master pode aprovar usuários', 'error');
+    return;
+  }
+  _origAprovarUsrSec(id);
+};
+
+// — Override deleteUsuario: apenas Master exclui —
+var _origDeleteUsrSec = deleteUsuario;
+deleteUsuario = function(id) {
+  if (!isMaster()) {
+    showNotif('Apenas o Administrador Master pode excluir usuários', 'error');
+    return;
+  }
+  _origDeleteUsrSec(id);
+};
+
+
+// ═══════════════════════════════════════════
+// PARTE 4: SYNC DO RENDERS MAP
+// ═══════════════════════════════════════════
+
+renders.perfis = renderPerfis;
+renders.usuarios = renderUsuarios;
+renders.consultorios = renderConsultorios;
+
+
+
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
   if(authUser){setLoginLoading(true);enterApp(authUser)}
