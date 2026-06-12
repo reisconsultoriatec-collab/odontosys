@@ -5052,6 +5052,87 @@ window.migrateEncryption = function() {
 // ══════════════════════════════════════════════════════════════
 console.log('%c[SEGURANÇA] Patch v4.2 carregado — Senhas + Criptografia + Auditoria + Validação', 'color:#1565C0;font-weight:bold;font-size:12px');
 
+// ══════════════════════════════════════════════════════════════════
+// ██  FIX LOGIN UI — Botão Entrar + Mostrar/Esconder Senha       ██
+// ██  Colar APÓS o Patch v4.2, ANTES do auth.onAuthStateChanged  ██
+// ══════════════════════════════════════════════════════════════════
+
+// ╔══════════════════════════════════════════╗
+// ║  FIX 1: Botão Entrar resetar ao logout  ║
+// ╚══════════════════════════════════════════╝
+
+var _fixDoLogout = doLogout;
+doLogout = function() {
+  _fixDoLogout();
+  // Resetar estado dos botões e campos
+  setLoginLoading(false);
+  hideLoginError();
+  var passEl = document.getElementById('login-pass');
+  if (passEl) passEl.value = '';
+  var emailEl = document.getElementById('login-email');
+  if (emailEl) emailEl.focus();
+};
+
+// ╔══════════════════════════════════════════╗
+// ║  FIX 2: Toggle Mostrar/Esconder Senha   ║
+// ╚══════════════════════════════════════════╝
+
+(function() {
+  // CSS para o botão de toggle
+  var style = document.createElement('style');
+  style.textContent = [
+    '.pass-wrap{position:relative}',
+    '.pass-wrap input{padding-right:40px !important}',
+    '.pass-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);',
+    'background:none;border:none;cursor:pointer;color:#90a4ae;font-size:18px;',
+    'padding:4px;display:flex;align-items:center;justify-content:center;',
+    'transition:color .15s;outline:none}',
+    '.pass-toggle:hover{color:#1565C0}'
+  ].join('');
+  document.head.appendChild(style);
+
+  // Aplicar toggle em todos os campos de senha
+  var passwordFields = [
+    'login-pass',
+    'reg-pass',
+    'reg-pass2'
+  ];
+
+  passwordFields.forEach(function(fieldId) {
+    var input = document.getElementById(fieldId);
+    if (!input) return;
+
+    // Envolver o input em um wrapper
+    var wrapper = document.createElement('div');
+    wrapper.className = 'pass-wrap';
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+
+    // Criar botão toggle
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pass-toggle';
+    btn.tabIndex = -1;
+    btn.title = 'Mostrar senha';
+    btn.innerHTML = '<i class="ti ti-eye"></i>';
+
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      btn.innerHTML = isPassword
+        ? '<i class="ti ti-eye-off"></i>'
+        : '<i class="ti ti-eye"></i>';
+      btn.title = isPassword ? 'Esconder senha' : 'Mostrar senha';
+      input.focus();
+    });
+
+    wrapper.appendChild(btn);
+  });
+})();
+
+// ══════════════════════════════════════════════════════════════════
+console.log('%c[UI] Fix Login aplicado — Botão + Toggle Senha', 'color:#6a1b9a;font-weight:bold');
 
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
