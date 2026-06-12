@@ -3140,6 +3140,1028 @@ closeModal = function(id) {
   }
 };
 
+// ══════════════════════════════════════════════════════════════════
+// ██  PATCH DE SEGURANÇA v4.1 — OdontoSystem                    ██
+// ██  Colar este bloco INTEIRO antes do auth.onAuthStateChanged  ██
+// ══════════════════════════════════════════════════════════════════
+//
+// CORREÇÕES APLICADAS:
+// 1. XSS — escapeHtml (H) em TODOS os renders com dados de usuário
+// 2. ISOLAMENTO — Hardening de variáveis críticas no cliente
+// 3. VALIDAÇÃO — CPF, telefone, e-mail com máscara e validação
+// 4. INTEGRIDADE — Verificação contínua de permissões
+//
+// ══════════════════════════════════════════════════════════════════
+
+// ╔══════════════════════════════════════════╗
+// ║  1. FUNÇÕES DE ESCAPE CONTRA XSS        ║
+// ╚══════════════════════════════════════════╝
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function H(s) { return escapeHtml(s); }
+
+// Sanitiza IDs para uso em atributos onclick (só alfanuméricos + _ -)
+function safeId(id) {
+  return String(id || '').replace(/[^a-zA-Z0-9_\-]/g, '');
+}
+
+// Sanitiza valor para uso dentro de atributo style
+function safeCss(val) {
+  return String(val || '').replace(/[^a-zA-Z0-9#%.,() \-]/g, '');
+}
+
+// ╔══════════════════════════════════════════╗
+// ║  2. VALIDAÇÃO DE ENTRADA                ║
+// ╚══════════════════════════════════════════╝
+
+function validateCPF(cpf) {
+  cpf = String(cpf || '').replace(/\D/g, '');
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+  var sum = 0, rest;
+  for (var i = 1; i <= 9; i++) sum += parseInt(cpf[i - 1]) * (11 - i);
+  rest = (sum * 10) % 11;
+  if (rest === 10 || rest === 11) rest = 0;
+  if (rest !== parseInt(cpf[9])) return false;
+  sum = 0;
+  for (var j = 1; j <= 10; j++) sum += parseInt(cpf[j - 1]) * (12 - j);
+  rest = (sum * 10) % 11;
+  if (rest === 10 || rest === 11) rest = 0;
+  return rest === parseInt(cpf[10]);
+}
+
+function maskCPF(v) {
+  v = String(v || '').replace(/\D/g, '').slice(0, 11);
+  if (v.length > 9) return v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+  if (v.length > 6) return v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+  if (v.length > 3) return v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+  return v;
+}
+
+function maskTelefone(v) {
+  v = String(v || '').replace(/\D/g, '').slice(0, 11);
+  if (v.length > 10) return v.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+  if (v.length > 6) return v.replace(/(\d{2})(\d{4,5})(\d{0,4})/, '($1) $2-$3');
+  if (v.length > 2) return v.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+  return v;
+}
+
+function validateEmail(email) {
+  if (!email) return true; // opcional
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// Auto-aplicar máscaras nos campos
+document.addEventListener('input', function(e) {
+  if (e.target.id === 'pac-cpf' || e.target.id === 'clt-cnpj') {
+    e.target.value = maskCPF(e.target.value);
+  }
+  if (e.target.id === 'pac-tel' || e.target.id === 'med-tel' || e.target.id === 'clt-tel') {
+    e.target.value = maskTelefone(e.target.value);
+  }
+});
+
+// ╔══════════════════════════════════════════╗
+// ║  3. OVERRIDE — savePaciente COM VALIDAÇÃO║
+// ╚══════════════════════════════════════════╝
+
+var _secSavePaciente = savePaciente;
+savePaciente = function() {
+  var cpf = document.getElementById('pac-cpf').value.trim();
+  var email = document.getElementById('pac-email').value.trim();
+  var tel = document.getElementById('pac-tel').value.trim();
+
+  if (cpf && !validateCPF(cpf)) {
+    showNotif('CPF inválido. Verifique os dígitos.', 'error');
+    return;
+  }
+  if (email && !validateEmail(email)) {
+    showNotif('E-mail inválido.', 'error');
+    return;
+  }
+  _secSavePaciente();
+};
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  4. OVERRIDE DE TODOS OS RENDERS — COM H() APLICADO ║
+// ╚══════════════════════════════════════════════════════╝
+
+// ── PACIENTES ──────────────────────────────────────────
+renderPacientes = function() {
+  var q = (document.getElementById('search-pac').value || '').toLowerCase();
+  var cat = document.getElementById('filter-cat').value;
+  var list = DB.get('pacientes').filter(function(p) {
+    return (!q || p.nome.toLowerCase().indexOf(q) >= 0 || (p.tel || '').indexOf(q) >= 0) &&
+           (!cat || (p.cats || []).indexOf(cat) >= 0 || (p.convenio || '').indexOf(cat) >= 0);
+  });
+  var el = document.getElementById('patient-list');
+  if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-users"></i>Nenhum paciente</div>'; return; }
+  el.innerHTML = list.map(function(p) {
+    var sid = safeId(p.id);
+    var tags = (p.cats || []).map(function(c) { return '<span class="tag badge-blue">' + H(c) + '</span>'; }).join('');
+    return '<div class="patient-row" onclick="openProntuario(\'' + sid + '\')">' +
+      '<div class="patient-avatar" style="background:' + safeCss(avatarColor(p.nome)) + '">' + H(initials(p.nome)) + '</div>' +
+      '<div class="patient-info"><div class="patient-name">' + H(p.nome) + '</div>' +
+      '<div class="patient-sub">' + H(calcAge(p.nasc)) + (p.tel ? ' · ' + H(p.tel) : '') + '</div></div>' +
+      '<div class="tags-row">' + tags + '</div>' +
+      '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();editPaciente(\'' + sid + '\')"><i class="ti ti-edit"></i></button>' +
+      '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deletePaciente(\'' + sid + '\')"><i class="ti ti-trash"></i></button></div>';
+  }).join('');
+};
+
+// ── AGENDA (DIA) ──────────────────────────────────────
+renderAgenda = function() {
+  var profId = (document.getElementById('filter-prof') || {}).value || '';
+  var status = (document.getElementById('filter-status') || {}).value || '';
+  var pacs = DB.get('pacientes'), meds = DB.get('profissionais');
+  var list = DB.get('agendamentos').filter(function(a) {
+    return a.data === selDate && (!profId || a.profId === profId) && (!status || a.status === status);
+  }).sort(function(a, b) { return a.hora.localeCompare(b.hora); });
+  var wrap = document.getElementById('agenda-table-wrap');
+  if (!list.length) { wrap.innerHTML = '<div class="empty-state"><i class="ti ti-calendar-off"></i>Nenhuma consulta</div>'; return; }
+  wrap.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Hora</th><th>Paciente</th><th>Prof.</th><th>Proc.</th><th>Status</th><th></th></tr></thead><tbody>' +
+    list.map(function(a) {
+      var pac = null; for (var i = 0; i < pacs.length; i++) { if (pacs[i].id === a.pacienteId) { pac = pacs[i]; break; } }
+      var med = null; for (var j = 0; j < meds.length; j++) { if (meds[j].id === a.profId) { med = meds[j]; break; } }
+      var sid = safeId(a.id);
+      return '<tr><td><b>' + H(a.hora) + '</b></td><td>' + H(pac ? pac.nome : '—') + '</td><td>' + H(med ? med.nome : '—') + '</td>' +
+        '<td>' + H(a.proc) + '</td><td><span class="badge ' + (SB[a.status] || 'badge-gray') + '">' + H(a.status) + '</span></td>' +
+        '<td style="display:flex;gap:4px"><button class="btn btn-outline btn-sm" onclick="editAppt(\'' + sid + '\')"><i class="ti ti-edit"></i></button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteAppt(\'' + sid + '\')"><i class="ti ti-trash"></i></button></td></tr>';
+    }).join('') + '</tbody></table></div>';
+  renderCheckin();
+};
+
+// ── AGENDA (SEMANA) ───────────────────────────────────
+renderWeek = function() {
+  var wrap = document.getElementById('agenda-week-wrap');
+  var profId = (document.getElementById('filter-prof') || {}).value || '';
+  var meds = DB.get('profissionais'), pacs = DB.get('pacientes'), appts = DB.get('agendamentos');
+  var d = new Date(selDate + 'T00:00:00'), dow = d.getDay(), dates = [];
+  for (var i = 0; i < 7; i++) { var dd = new Date(d); dd.setDate(d.getDate() - dow + i); dates.push(dd.toISOString().split('T')[0]); }
+  var td = today(), DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  var html = '<div style="min-width:700px"><div style="display:flex;border-bottom:2px solid #e0e0e0"><div style="width:52px;flex-shrink:0;background:#f8faff"></div>';
+  dates.forEach(function(dt) {
+    var isT = dt === td; var p = dt.split('-'); var dw = new Date(dt + 'T00:00:00').getDay();
+    html += '<div style="flex:1;text-align:center;padding:6px;font-size:11px;font-weight:700;border-right:1px solid #e0e0e0;background:' + (isT ? '#e3f2fd' : '#f8faff') + '">' + H(DAYS[dw]) + '<br><b>' + parseInt(p[2]) + '</b></div>';
+  });
+  html += '</div>';
+  var profList = profId ? meds.filter(function(m) { return m.id === profId; }) : meds;
+  if (!profList.length) profList = [{ id: '', nome: '—', cor: '' }];
+  profList.forEach(function(prof) {
+    html += '<div style="display:flex;border-bottom:1px solid #f0f0f0"><div style="width:52px;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:4px"><div style="width:28px;height:28px;border-radius:50%;background:' + safeCss(prof.cor || avatarColor(prof.nome)) + ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">' + H(initials(prof.nome)) + '</div></div>';
+    dates.forEach(function(dt) {
+      var dayA = appts.filter(function(a) { return a.data === dt && a.profId === prof.id; }).sort(function(a, b) { return a.hora.localeCompare(b.hora); });
+      html += '<div style="flex:1;border-right:1px solid #e0e0e0;padding:4px;min-height:80px">';
+      if (!dayA.length) html += '<div class="week-empty">—</div>';
+      else dayA.forEach(function(a) {
+        var pac = null; for (var k = 0; k < pacs.length; k++) { if (pacs[k].id === a.pacienteId) { pac = pacs[k]; break; } }
+        var stMap = { Confirmado: '#e3f2fd|#1565C0', Presente: '#e8f5e9|#2e7d32', Aguardando: '#fff3e0|#e65100', Faltou: '#ffebee|#c62828', Agendado: '#eceff1|#546e7a' };
+        var sp = (stMap[a.status] || '#eceff1|#546e7a').split('|');
+        html += '<div class="week-appt" style="background:' + sp[0] + ';border-left-color:' + sp[1] + '" onclick="editAppt(\'' + safeId(a.id) + '\')">' +
+          '<div class="week-appt-name" style="color:' + sp[1] + '">' + H(a.hora) + ' ' + H(pac ? pac.nome : '—') + '</div>' +
+          '<div class="week-appt-info">' + H(a.proc) + '</div></div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+};
+
+// ── CHECK-IN ──────────────────────────────────────────
+renderCheckin = function() {
+  if (!checkinVisible) return;
+  var pacs = DB.get('pacientes');
+  var list = DB.get('agendamentos').filter(function(a) {
+    return a.data === selDate && (a.status === 'Agendado' || a.status === 'Confirmado' || a.status === 'Aguardando');
+  }).sort(function(a, b) { return a.hora.localeCompare(b.hora); });
+  var el = document.getElementById('checkin-list');
+  if (!list.length) { el.innerHTML = '<div style="font-size:12px;color:#15803d">Nenhuma pendente.</div>'; return; }
+  el.innerHTML = list.map(function(a) {
+    var pac = null; for (var i = 0; i < pacs.length; i++) { if (pacs[i].id === a.pacienteId) { pac = pacs[i]; break; } }
+    var nome = pac ? pac.nome : '—';
+    var sid = safeId(a.id);
+    return '<div class="checkin-item"><div class="patient-avatar" style="background:' + safeCss(avatarColor(nome)) + ';width:30px;height:30px;font-size:10px;min-width:30px">' + H(initials(nome)) + '</div>' +
+      '<div style="flex:1"><div class="checkin-name">' + H(nome) + '</div><div style="font-size:11px;color:#78909c">' + H(a.hora) + ' · ' + H(a.proc) + '</div></div>' +
+      '<div style="display:flex;gap:4px"><button class="status-btn sb-presente" onclick="quickStatus(\'' + sid + '\',\'Presente\')"><i class="ti ti-check"></i></button>' +
+      '<button class="status-btn sb-aguardando" onclick="quickStatus(\'' + sid + '\',\'Aguardando\')"><i class="ti ti-clock"></i></button>' +
+      '<button class="status-btn sb-faltou" onclick="quickStatus(\'' + sid + '\',\'Faltou\')"><i class="ti ti-x"></i></button></div></div>';
+  }).join('');
+};
+
+// ── PROFISSIONAIS ─────────────────────────────────────
+renderProfissionais = function() {
+  var q = (document.getElementById('search-medico').value || '').toLowerCase();
+  var list = DB.get('profissionais').filter(function(m) { return !q || m.nome.toLowerCase().indexOf(q) >= 0; });
+  var el = document.getElementById('prof-list');
+  if (!list.length) { el.innerHTML = '<div class="empty-state" style="grid-column:span 2"><i class="ti ti-user-heart"></i>Nenhum</div>'; return; }
+  el.innerHTML = list.map(function(m) {
+    var sid = safeId(m.id);
+    return '<div class="card" style="margin:0"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+      '<div class="patient-avatar" style="background:' + safeCss(m.cor || '#1565C0') + ';width:44px;height:44px;font-size:14px;min-width:44px">' + H(initials(m.nome)) + '</div>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#1a237e">' + H(m.nome) + '</div>' +
+      '<div style="font-size:11px;color:#78909c">' + H(m.esp || '—') + ' · ' + H(m.cro || '—') + '</div></div>' +
+      '<div style="display:flex;gap:4px"><button class="btn btn-outline btn-sm" onclick="editMedico(\'' + sid + '\')"><i class="ti ti-edit"></i></button>' +
+      '<button class="btn btn-danger btn-sm" onclick="deleteMedico(\'' + sid + '\')"><i class="ti ti-trash"></i></button></div></div></div>';
+  }).join('');
+};
+
+// ── DASHBOARD ─────────────────────────────────────────
+renderDashboard = function() {
+  var td = today(), appts = DB.get('agendamentos'), pacs = DB.get('pacientes'), est = DB.get('estoque'), fin = DB.get('financeiro');
+  var hoje = appts.filter(function(a) { return a.data === td; }), mes = new Date().toISOString().slice(0, 7);
+  var rec = fin.filter(function(f) { return f.tipo === 'entrada' && f.status === 'pago' && (f.data || '').slice(0, 7) === mes; }).reduce(function(s, f) { return s + Number(f.val); }, 0);
+  var crit = est.filter(function(e) { return getEstStatus(e) === 'Crítico'; }).length;
+  document.getElementById('dash-hoje').textContent = hoje.length;
+  document.getElementById('dash-hoje-sub').textContent = hoje.filter(function(a) { return a.status === 'Presente' || a.status === 'Chegou'; }).length + ' pres. · ' + hoje.filter(function(a) { return a.status === 'Aguardando'; }).length + ' aguard.';
+  document.getElementById('dash-receita').textContent = fmtMoney(rec);
+  document.getElementById('dash-pac').textContent = pacs.length;
+  document.getElementById('dash-estoque').textContent = crit;
+  var next = appts.filter(function(a) { return a.data >= td; }).sort(function(a, b) { return a.data === b.data ? a.hora.localeCompare(b.hora) : a.data.localeCompare(b.data); }).slice(0, 5);
+  var da = document.getElementById('dash-appts');
+  da.innerHTML = next.length ? next.map(function(a) {
+    var pac = null; for (var i = 0; i < pacs.length; i++) { if (pacs[i].id === a.pacienteId) { pac = pacs[i]; break; } }
+    return '<div class="appt-item"><div class="appt-dot ' + (SD[a.status] || 'dot-blue') + '"></div><div class="appt-time">' + H(a.hora) + '</div>' +
+      '<div class="appt-info"><div class="appt-name">' + H(pac ? pac.nome : '—') + '</div><div class="appt-proc">' + H(a.proc) + '</div></div>' +
+      '<span class="badge ' + (SB[a.status] || 'badge-gray') + '">' + H(a.status) + '</span></div>';
+  }).join('') : '<div class="empty-state"><i class="ti ti-calendar-off"></i>Sem consultas</div>';
+  var tasks = DB.get('tarefas').filter(function(t) { return !t.done; }).slice(0, 5);
+  var PC = { Alta: 'p-high', 'Média': 'p-med', Baixa: 'p-low' };
+  document.getElementById('dash-tasks').innerHTML = tasks.length ? tasks.map(function(t) {
+    return '<div class="task-item"><div class="priority ' + (PC[t.pri] || 'p-low') + '"></div>' +
+      '<div class="task-check" onclick="toggleTask(\'' + safeId(t.id) + '\')"></div>' +
+      '<div class="task-text">' + H(t.desc) + '</div></div>';
+  }).join('') : '<div class="empty-state"><i class="ti ti-circle-check"></i>Nenhuma</div>';
+};
+
+// ── TAREFAS (com botão editar) ────────────────────────
+renderTarefas = function() {
+  var pri = (document.getElementById('filter-task-pri') || {}).value || '';
+  var all = DB.get('tarefas').filter(function(t) { return !pri || t.pri === pri; });
+  var PC = { Alta: 'p-high', 'Média': 'p-med', Baixa: 'p-low' };
+  var mk = function(t) {
+    var sid = safeId(t.id);
+    return '<div class="task-item' + (t.done ? ' done' : '') + '"><div class="priority ' + (PC[t.pri] || 'p-low') + '"></div>' +
+      '<div class="task-check' + (t.done ? ' checked' : '') + '" onclick="toggleTask(\'' + sid + '\')">' + (t.done ? '<i class="ti ti-check" style="font-size:11px"></i>' : '') + '</div>' +
+      '<div class="task-text">' + H(t.desc) + '</div>' + (t.date ? '<div class="task-date">' + H(fmtDate(t.date)) + '</div>' : '') +
+      '<button class="btn btn-outline btn-sm" onclick="editTask(\'' + sid + '\')"><i class="ti ti-edit"></i></button>' +
+      '<button class="btn btn-danger btn-sm" onclick="deleteTask(\'' + sid + '\')"><i class="ti ti-trash"></i></button></div>';
+  };
+  document.getElementById('tasks-pending').innerHTML = all.filter(function(t) { return !t.done; }).map(mk).join('') || '<div class="empty-state"><i class="ti ti-circle-check"></i>Nenhuma</div>';
+  document.getElementById('tasks-done').innerHTML = all.filter(function(t) { return t.done; }).map(mk).join('') || '<div class="empty-state"><i class="ti ti-checkbox"></i>Nenhuma</div>';
+};
+
+// ── FINANCEIRO ────────────────────────────────────────
+renderFinanceiro = function() {
+  var mes = new Date().toISOString().slice(0, 7), list = DB.get('financeiro');
+  var deste = list.filter(function(f) { return (f.data || '').slice(0, 7) === mes; });
+  var rec = deste.filter(function(f) { return f.tipo === 'entrada' && f.status === 'pago'; }).reduce(function(s, f) { return s + Number(f.val); }, 0);
+  var desp = deste.filter(function(f) { return f.tipo === 'saida' && f.status === 'pago'; }).reduce(function(s, f) { return s + Number(f.val); }, 0);
+  var receb = list.filter(function(f) { return f.tipo === 'entrada' && f.status === 'pendente'; }).reduce(function(s, f) { return s + Number(f.val); }, 0);
+  document.getElementById('fin-receita').textContent = fmtMoney(rec);
+  document.getElementById('fin-despesas').textContent = fmtMoney(desp);
+  document.getElementById('fin-lucro').textContent = fmtMoney(rec - desp);
+  document.getElementById('fin-receber').textContent = fmtMoney(receb);
+  var sorted = list.slice().sort(function(a, b) { return (b.data || '').localeCompare(a.data || ''); }).slice(0, 20);
+  var fl = document.getElementById('fin-list');
+  fl.innerHTML = sorted.length ? sorted.map(function(f) {
+    var sid = safeId(f.id);
+    return '<div class="finance-row"><div class="fin-icon ' + (f.tipo === 'entrada' ? 'in' : 'out') + '"><i class="ti ti-arrow-' + (f.tipo === 'entrada' ? 'down' : 'up') + '-right"></i></div>' +
+      '<div class="fin-desc"><div class="fin-name">' + H(f.desc) + '</div><div class="fin-cat">' + H(f.cat) + ' · ' + H(fmtDate(f.data)) + '</div></div>' +
+      '<div class="fin-val ' + (f.tipo === 'entrada' ? 'in' : 'out') + '">' + (f.tipo === 'entrada' ? '+' : '-') + H(fmtMoney(f.val)) + '</div>' +
+      '<button class="btn btn-danger btn-sm" style="margin-left:6px" onclick="deleteFinanceiro(\'' + sid + '\')"><i class="ti ti-trash"></i></button></div>';
+  }).join('') : '<div class="empty-state"><i class="ti ti-currency-dollar"></i>Nenhuma</div>';
+  var cats = {};
+  list.filter(function(f) { return f.tipo === 'entrada' && f.status === 'pago'; }).forEach(function(f) { cats[f.cat] = (cats[f.cat] || 0) + Number(f.val); });
+  var total = Object.values(cats).reduce(function(s, v) { return s + v; }, 0) || 1;
+  var cols = ['#4caf50', '#2196f3', '#9c27b0', '#ff9800', '#f44336']; var ci = 0;
+  document.getElementById('fin-categorias').innerHTML = Object.entries(cats).sort(function(a, b) { return b[1] - a[1]; }).map(function(e) {
+    var pct = Math.round(e[1] / total * 100);
+    return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span>' + H(e[0]) + '</span><b>' + H(fmtMoney(e[1])) + '</b></div>' +
+      '<div class="stock-bar"><div class="stock-fill" style="width:' + pct + '%;background:' + cols[ci++ % cols.length] + '"></div></div></div>';
+  }).join('') || '<div class="empty-state"><i class="ti ti-chart-bar"></i>Sem dados</div>';
+};
+
+// ── CONTAS ────────────────────────────────────────────
+renderContas = function() {
+  var ft = (document.getElementById('cp-filter-tipo') || {}).value || '';
+  var fs = (document.getElementById('cp-filter-status') || {}).value || '';
+  var list = DB.get('contas').filter(function(c) { var st = getContaStatus(c); return (!ft || c.tipo === ft) && (!fs || st === fs); }).sort(function(a, b) { return (a.vencimento || '').localeCompare(b.vencimento || ''); });
+  var all = DB.get('contas');
+  function sm(f) { return all.filter(f).reduce(function(s, c) { return s + Number(c.val); }, 0); }
+  var el1 = document.getElementById('cp-vencidas'); if (el1) el1.textContent = fmtMoney(sm(function(c) { return c.tipo === 'pagar' && getContaStatus(c) === 'vencido'; }));
+  var el2 = document.getElementById('cp-avencer'); if (el2) el2.textContent = fmtMoney(sm(function(c) { return c.tipo === 'pagar' && getContaStatus(c) === 'pendente'; }));
+  var el3 = document.getElementById('cr-emdia'); if (el3) el3.textContent = fmtMoney(sm(function(c) { return c.tipo === 'receber' && getContaStatus(c) === 'pendente'; }));
+  var el4 = document.getElementById('cr-vencidas'); if (el4) el4.textContent = fmtMoney(sm(function(c) { return c.tipo === 'receber' && getContaStatus(c) === 'vencido'; }));
+  var el = document.getElementById('contas-list'); if (!el) return;
+  if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-calendar-due"></i>Nenhuma</div>'; return; }
+  var sB = { pago: 'badge-green', pendente: 'badge-amber', vencido: 'badge-red' };
+  var sL = { pago: 'Pago', pendente: 'Pendente', vencido: 'Vencido' };
+  el.innerHTML = '<table><thead><tr><th>Tipo</th><th>Descrição</th><th>Venc.</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>' +
+    list.map(function(c) {
+      var st = getContaStatus(c); var sid = safeId(c.id);
+      return '<tr><td><span class="badge ' + (c.tipo === 'receber' ? 'badge-green' : 'badge-red') + '">' + (c.tipo === 'receber' ? 'Receber' : 'Pagar') + '</span></td>' +
+        '<td>' + H(c.desc) + '</td><td>' + H(fmtDate(c.vencimento)) + '</td><td><b>' + H(fmtMoney(c.val)) + '</b></td>' +
+        '<td><span class="badge ' + sB[st] + '">' + sL[st] + '</span></td>' +
+        '<td style="display:flex;gap:4px">' + (st !== 'pago' ? '<button class="btn btn-success btn-sm" onclick="pagarConta(\'' + sid + '\')"><i class="ti ti-check"></i></button>' : '') +
+        '<button class="btn btn-outline btn-sm" onclick="editConta(\'' + sid + '\')"><i class="ti ti-edit"></i></button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteConta(\'' + sid + '\')"><i class="ti ti-trash"></i></button></td></tr>';
+    }).join('') + '</tbody></table>';
+};
+
+// ── ESTOQUE ───────────────────────────────────────────
+renderEstoque = function() {
+  var q = (document.getElementById('search-estoque').value || '').toLowerCase();
+  var cat = document.getElementById('filter-estoque-cat').value, stf = document.getElementById('filter-estoque-status').value;
+  var list = DB.get('estoque').filter(function(e) { var st = getEstStatus(e); return (!q || e.nome.toLowerCase().indexOf(q) >= 0) && (!cat || e.cat === cat) && (!stf || st === stf); });
+  var el = document.getElementById('estoque-table');
+  if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-package"></i>Nenhum</div>'; return; }
+  var sB = { Normal: 'badge-green', 'Atenção': 'badge-amber', 'Crítico': 'badge-red' };
+  var sF = { Normal: 'stock-ok', 'Atenção': 'stock-warn', 'Crítico': 'stock-crit' };
+  el.innerHTML = '<table><thead><tr><th>Produto</th><th>Cat.</th><th>Qtd</th><th>Nível</th><th>Status</th><th></th></tr></thead><tbody>' +
+    list.map(function(e) {
+      var st = getEstStatus(e); var pct = e.min > 0 ? Math.min(100, Math.round(e.qtd / e.min * 70)) : 100; var sid = safeId(e.id);
+      return '<tr><td><b>' + H(e.nome) + '</b></td><td><span class="badge badge-gray">' + H(e.cat) + '</span></td>' +
+        '<td>' + H(e.qtd) + ' ' + H(e.un) + '</td><td><div class="stock-bar" style="width:80px"><div class="stock-fill ' + sF[st] + '" style="width:' + pct + '%"></div></div></td>' +
+        '<td><span class="badge ' + sB[st] + '">' + H(st) + '</span></td>' +
+        '<td style="display:flex;gap:4px"><button class="btn btn-outline btn-sm" onclick="editEstoque(\'' + sid + '\')"><i class="ti ti-edit"></i></button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteEstoque(\'' + sid + '\')"><i class="ti ti-trash"></i></button></td></tr>';
+    }).join('') + '</tbody></table>';
+};
+
+// ── DOCUMENTOS (com botão visualizar) ─────────────────
+renderDocumentos = function() {
+  var list = DB.get('documentos').sort(function(a, b) { return (b.data || '').localeCompare(a.data || ''); });
+  var el = document.getElementById('docs-list'); if (!el) return;
+  if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-file-off"></i>Nenhum documento</div>'; return; }
+  el.innerHTML = '<table><thead><tr><th>Tipo</th><th>Paciente</th><th>Prof.</th><th>Data</th><th></th></tr></thead><tbody>' +
+    list.map(function(d) {
+      var sid = safeId(d.id);
+      return '<tr><td><span class="badge badge-blue">' + H(d.tipo) + '</span></td><td>' + H(d.pacienteNome) + '</td><td>' + H(d.medicoNome || '—') + '</td><td>' + H(fmtDate(d.data)) + '</td>' +
+        '<td style="display:flex;gap:4px"><button class="btn btn-danger btn-sm" onclick="deleteDocumento(\'' + sid + '\')"><i class="ti ti-trash"></i></button></td></tr>';
+    }).join('') + '</tbody></table>';
+};
+
+// ── EXAMES (com botão visualizar) ─────────────────────
+renderExames = function() {
+  var q = (document.getElementById('search-exame').value || '').toLowerCase();
+  var tipo = (document.getElementById('filter-exame-tipo') || {}).value || '';
+  var list = DB.get('exames').filter(function(e) { return (!q || (e.pacienteNome || '').toLowerCase().indexOf(q) >= 0) && (!tipo || e.tipo === tipo); }).sort(function(a, b) { return (b.data || '').localeCompare(a.data || ''); });
+  var el = document.getElementById('exames-list'); if (!el) return;
+  if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-microscope"></i>Nenhum exame</div>'; return; }
+  el.innerHTML = '<table><thead><tr><th>Paciente</th><th>Tipo</th><th>Data</th><th>Arquivo</th><th></th></tr></thead><tbody>' +
+    list.map(function(e) {
+      var sid = safeId(e.id);
+      return '<tr><td>' + H(e.pacienteNome) + '</td><td><span class="badge badge-blue">' + H(e.tipo) + '</span></td><td>' + H(fmtDate(e.data)) + '</td><td>' + H(e.arquivo || '—') + '</td>' +
+        '<td><button class="btn btn-danger btn-sm" onclick="deleteExame(\'' + sid + '\')"><i class="ti ti-trash"></i></button></td></tr>';
+    }).join('') + '</tbody></table>';
+};
+
+// ── PLANO DE TRATAMENTO ───────────────────────────────
+renderPlano = function() {
+  var id = window._currentPacId; if (!id) return;
+  var filter = document.getElementById('plano-filter-status').value;
+  var list = DB.get('planos').filter(function(p) { return p.pacienteId === id && (!filter || p.status === filter); });
+  var all = DB.get('planos').filter(function(p) { return p.pacienteId === id; });
+  var el = document.getElementById('plano-list');
+  var ST = { pendente: 'badge-amber', aprovado: 'badge-green', concluido: 'badge-blue' };
+  var STL = { pendente: 'Pendente', aprovado: 'Aprovado', concluido: 'Concluído' };
+  if (!list.length) el.innerHTML = '<div class="empty-state"><i class="ti ti-clipboard-list"></i>Nenhum</div>';
+  else el.innerHTML = list.map(function(item) {
+    var sid = safeId(item.id);
+    return '<div class="plano-item ' + H(item.status) + '"><div class="plano-info"><div class="plano-proc">' + H(item.proc) +
+      (item.dente ? ' <span style="font-size:11px;color:#78909c">· ' + H(item.dente) + '</span>' : '') + '</div>' +
+      '<div class="plano-sub">' + H(item.profNome || '') + (item.previsao ? ' · ' + H(fmtDate(item.previsao)) : '') + '</div></div>' +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div class="plano-val">' + H(fmtMoney(item.valor)) + '</div>' +
+      '<span class="badge ' + ST[item.status] + '">' + STL[item.status] + '</span></div>' +
+      '<div style="display:flex;flex-direction:column;gap:4px;margin-left:8px">' +
+      (item.status === 'pendente' ? '<button class="btn btn-success btn-sm" onclick="aprovarPlano(\'' + sid + '\')"><i class="ti ti-check"></i></button>' : '') +
+      (item.status === 'aprovado' ? '<button class="btn btn-primary btn-sm" onclick="concluirPlano(\'' + sid + '\')"><i class="ti ti-flag"></i></button>' : '') +
+      '<button class="btn btn-outline btn-sm" onclick="editPlano(\'' + sid + '\')"><i class="ti ti-edit"></i></button>' +
+      '<button class="btn btn-danger btn-sm" onclick="deletePlano(\'' + sid + '\')"><i class="ti ti-trash"></i></button></div></div>';
+  }).join('');
+  var tot = all.reduce(function(s, p) { return s + Number(p.valor || 0); }, 0);
+  var apr = all.filter(function(p) { return p.status === 'aprovado'; }).reduce(function(s, p) { return s + Number(p.valor || 0); }, 0);
+  var con = all.filter(function(p) { return p.status === 'concluido'; }).reduce(function(s, p) { return s + Number(p.valor || 0); }, 0);
+  var pen = all.filter(function(p) { return p.status === 'pendente'; }).reduce(function(s, p) { return s + Number(p.valor || 0); }, 0);
+  document.getElementById('plano-totals').innerHTML = '<span><b>Total:</b> ' + H(fmtMoney(tot)) + '</span><span style="color:#ff9800"><b>Pend.:</b> ' + H(fmtMoney(pen)) + '</span><span style="color:#2e7d32"><b>Aprov.:</b> ' + H(fmtMoney(apr)) + '</span><span style="color:#1565C0"><b>Concl.:</b> ' + H(fmtMoney(con)) + '</span>';
+};
+
+// ── HISTÓRICO ─────────────────────────────────────────
+renderHistorico = function(id) {
+  var list = DB.get('atendimentos').filter(function(a) { return a.pacienteId === id; }).sort(function(a, b) { return b.data.localeCompare(a.data); });
+  var el = document.getElementById('pron-hist-list');
+  if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-history"></i>Nenhum</div>'; return; }
+  el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Data</th><th>Proc.</th><th>Dentista</th><th>Obs</th><th></th></tr></thead><tbody>' +
+    list.map(function(a) {
+      return '<tr><td>' + H(fmtDate(a.data)) + '</td><td>' + H(a.proc) + '</td><td>' + H(a.dentista) + '</td><td>' + H(a.obs || '—') + '</td>' +
+        '<td><button class="btn btn-danger btn-sm" onclick="deleteAtendimento(\'' + safeId(a.id) + '\')"><i class="ti ti-trash"></i></button></td></tr>';
+    }).join('') + '</tbody></table></div>';
+};
+
+// ── ANIVERSARIANTES ───────────────────────────────────
+renderAniversariantes = function() {
+  var pacs = DB.get('pacientes').filter(function(p) { return p.nasc; });
+  var now = new Date(); var tM = now.getMonth() + 1, tD = now.getDate();
+  var fM = parseInt((document.getElementById('aniv-filter-mes') || {}).value) || 0;
+  function pN(n) { var p = n.split('-'); return { mes: parseInt(p[1]), dia: parseInt(p[2]), ano: parseInt(p[0]) }; }
+  var hoje = pacs.filter(function(p) { var n = pN(p.nasc); return n.mes === tM && n.dia === tD; });
+  var semana = pacs.filter(function(p) { var n = pN(p.nasc); var bd = new Date(now.getFullYear(), n.mes - 1, n.dia); if (bd < now) bd.setFullYear(now.getFullYear() + 1); var diff = (bd - now) / (864e5); return diff >= 0 && diff <= 7 && !(n.mes === tM && n.dia === tD); });
+  var mF = fM || tM;
+  var doMes = pacs.filter(function(p) { return pN(p.nasc).mes === mF; }).sort(function(a, b) { return pN(a.nasc).dia - pN(b.nasc).dia; });
+  var MN = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  document.getElementById('aniv-hoje').textContent = hoje.length;
+  document.getElementById('aniv-semana').textContent = semana.length;
+  document.getElementById('aniv-mes').textContent = doMes.length;
+  document.getElementById('aniv-mes-label').textContent = MN[mF] || '—';
+  document.getElementById('aniv-total').textContent = pacs.length;
+  function card(p, d) {
+    var n = pN(p.nasc); var idade = now.getFullYear() - n.ano;
+    return '<div class="aniv-item' + (d ? ' hoje' : '') + '"><div class="patient-avatar" style="background:' + safeCss(avatarColor(p.nome)) + ';width:36px;height:36px;font-size:12px;min-width:36px">' + H(initials(p.nome)) + '</div>' +
+      '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + H(p.nome) + '</div><div class="aniv-age">' + idade + ' anos</div></div>' +
+      '<div class="aniv-date">' + String(n.dia).padStart(2, '0') + '/' + String(n.mes).padStart(2, '0') + '</div></div>';
+  }
+  document.getElementById('aniv-list-hoje').innerHTML = hoje.length ? hoje.map(function(p) { return card(p, true); }).join('') : '<div class="empty-state" style="padding:20px"><i class="ti ti-cake"></i>Nenhum hoje</div>';
+  document.getElementById('aniv-list-mes').innerHTML = doMes.length ? doMes.map(function(p) { return card(p, pN(p.nasc).mes === tM && pN(p.nasc).dia === tD); }).join('') : '<div class="empty-state" style="padding:20px"><i class="ti ti-calendar"></i>Nenhum</div>';
+};
+
+// ── CONSULTÓRIOS ──────────────────────────────────────
+renderConsultorios = function() {
+  var list = DB.get('consultorios'); var el = document.getElementById('consultorios-list');
+  if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-building"></i>Nenhum consultório cadastrado</div>'; return; }
+  var usuarios = DB.get('usuarios');
+  el.innerHTML = list.map(function(c) {
+    var usrCount = usuarios.filter(function(u) { return u.consultorioId === c.id; }).length;
+    var sid = safeId(c.id);
+    return '<div class="clinic-card"><div class="clinic-icon"><i class="ti ti-building"></i></div><div class="clinic-info"><div class="clinic-name">' + H(c.nome) + '</div>' +
+      '<div class="clinic-sub">' + (c.responsavel ? H(c.responsavel) + ' · ' : '') + H(c.cnpj || '—') + ' · ' + H(c.telefone || '—') + '<br>' + H(c.endereco || '—') + '</div>' +
+      '<div style="margin-top:6px"><span class="badge badge-blue">' + usrCount + ' usuário(s)</span> <span class="badge ' + (c.ativo ? 'badge-green' : 'badge-red') + '">' + (c.ativo ? 'Ativo' : 'Inativo') + '</span></div></div>' +
+      '<div style="display:flex;flex-direction:column;gap:4px"><button class="btn btn-outline btn-sm" onclick="editConsultorio(\'' + sid + '\')"><i class="ti ti-edit"></i></button>' +
+      '<button class="btn btn-danger btn-sm" onclick="deleteConsultorio(\'' + sid + '\')"><i class="ti ti-trash"></i></button></div></div>';
+  }).join('');
+};
+
+// ── LOGS ──────────────────────────────────────────────
+renderLogs = function() {
+  var fu = document.getElementById('log-filter-user').value;
+  var ft = document.getElementById('log-filter-type').value;
+  var fd = document.getElementById('log-filter-date').value;
+  var list = DB.get('logs').filter(function(l) { return (!fu || l.userId === fu) && (!ft || l.type === ft) && (!fd || l.ts.slice(0, 10) === fd); });
+  var uf = document.getElementById('log-filter-user'); var curU = uf.value;
+  uf.innerHTML = '<option value="">Todos</option>' + DB.get('usuarios').map(function(u) { return '<option value="' + safeId(u.id) + '">' + H(u.nome) + '</option>'; }).join('');
+  uf.value = curU;
+  document.getElementById('log-count').textContent = '— ' + list.length + ' registro(s)';
+  var types = ['login', 'logout', 'create', 'edit', 'delete', 'view'];
+  var tL = { login: 'Logins', logout: 'Logouts', create: 'Criações', edit: 'Edições', 'delete': 'Exclusões', view: 'Views' };
+  var tC = { login: 'badge-green', logout: 'badge-gray', create: 'badge-blue', edit: 'badge-amber', 'delete': 'badge-red', view: 'badge-purple' };
+  var counts = {}; DB.get('logs').forEach(function(l) { counts[l.type] = (counts[l.type] || 0) + 1; });
+  document.getElementById('log-stats').innerHTML = types.map(function(t) { return '<span class="badge ' + tC[t] + '">' + tL[t] + ': ' + (counts[t] || 0) + '</span>'; }).join('');
+  var el = document.getElementById('logs-list');
+  if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-activity"></i>Nenhum registro</div>'; return; }
+  var icons = { login: 'ti-login', logout: 'ti-logout', create: 'ti-plus', edit: 'ti-edit', 'delete': 'ti-trash', view: 'ti-eye' };
+  var icls = { login: 'log-login', logout: 'log-logout', create: 'log-create', edit: 'log-edit', 'delete': 'log-delete', view: 'log-view' };
+  el.innerHTML = list.map(function(l) {
+    return '<div class="log-item"><div class="log-icon ' + (icls[l.type] || 'log-view') + '"><i class="ti ' + (icons[l.type] || 'ti-point') + '"></i></div>' +
+      '<div class="log-info"><div class="log-action">' + H(l.action) + '</div><div class="log-meta">' + H(l.detail || '') + ' · <b>' + H(l.userName) + '</b></div></div>' +
+      '<div class="log-time">' + H(l.tsDisplay) + '</div></div>';
+  }).join('');
+};
+
+// ── COMISSÕES ─────────────────────────────────────────
+calcComissoes = function() {
+  var mes = document.getElementById('com-mes').value;
+  var pct = parseFloat(document.getElementById('com-pct').value) || 30;
+  if (!mes) return;
+  var meds = DB.get('profissionais');
+  var el = document.getElementById('comissoes-list');
+  if (!meds.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-user-heart"></i>Nenhum</div>'; return; }
+  var dados = meds.map(function(m) {
+    var ats = DB.get('agendamentos').filter(function(a) { return a.profId === m.id && (a.data || '').slice(0, 7) === mes && (a.status === 'Presente' || a.status === 'Chegou'); });
+    var rec = ats.reduce(function(s, a) { return s + Number(a.valor || 0); }, 0);
+    return { m: m, ats: ats.length, rec: rec, com: rec * (pct / 100) };
+  }).sort(function(a, b) { return b.rec - a.rec; });
+  var tR = dados.reduce(function(s, d) { return s + d.rec; }, 0) || 1;
+  el.innerHTML = dados.map(function(d) {
+    return '<div class="com-row"><div class="patient-avatar" style="background:' + safeCss(d.m.cor || avatarColor(d.m.nome)) + ';width:40px;height:40px;font-size:13px;min-width:40px">' + H(initials(d.m.nome)) + '</div>' +
+      '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + H(d.m.nome) + '</div><div style="font-size:11px;color:#78909c">' + d.ats + ' atend.</div>' +
+      '<div class="com-bar"><div class="com-bar-fill" style="width:' + Math.round(d.rec / tR * 100) + '%"></div></div></div>' +
+      '<div style="text-align:right"><div style="font-size:14px;font-weight:600;color:#1a237e">' + H(fmtMoney(d.rec)) + '</div>' +
+      '<div style="font-size:15px;font-weight:700;color:#2e7d32">' + H(fmtMoney(d.com)) + '</div></div></div>';
+  }).join('');
+};
+
+// ── ODONTOGRAMA SUMMARY ──────────────────────────────
+renderOdoSummary = function() {
+  var groups = {};
+  SUPERIOR_TEETH.concat(INFERIOR_TEETH).forEach(function(num) {
+    var d = odoData[num]; if (d && d.status && d.status !== 'higido') { if (!groups[d.status]) groups[d.status] = []; groups[d.status].push(num); }
+  });
+  var el = document.getElementById('odo-summary'); if (!el) return;
+  var keys = Object.keys(groups);
+  if (!keys.length) { el.innerHTML = '<div class="empty-state" style="padding:16px"><i class="ti ti-check"></i>Todos hígidos.</div>'; return; }
+  el.innerHTML = keys.map(function(st) {
+    var cfg = ODO_CFG[st];
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0">' +
+      '<div style="width:14px;height:14px;border-radius:3px;background:' + safeCss(cfg.bg) + ';border:1px solid ' + safeCss(cfg.border) + '"></div>' +
+      '<div style="flex:1"><b style="color:' + safeCss(cfg.text) + '">' + H(cfg.label) + '</b> <span style="font-size:11px;color:#78909c">Dentes: ' + H(groups[st].join(', ')) + '</span></div>' +
+      '<span class="badge badge-gray">' + groups[st].length + '</span></div>';
+  }).join('');
+};
+
+// ── PRONTUÁRIO (openProntuario) ───────────────────────
+var _secOpenProntuario = openProntuario;
+openProntuario = function(id) {
+  var pl = DB.get('pacientes'); var p = null;
+  for (var i = 0; i < pl.length; i++) { if (pl[i].id === id) { p = pl[i]; break; } } if (!p) return;
+  window._currentPacId = id;
+  document.getElementById('pron-select-msg').style.display = 'none';
+  document.getElementById('pron-content').style.display = 'block';
+  document.getElementById('pron-avatar').textContent = initials(p.nome);
+  document.getElementById('pron-avatar').style.background = avatarColor(p.nome);
+  document.getElementById('pron-patient-name').textContent = p.nome; // textContent = safe
+  document.getElementById('pron-patient-sub').textContent = calcAge(p.nasc) + ' · ' + (p.convenio || '—');
+  document.getElementById('pron-dados').innerHTML = '<table style="font-size:12px"><tr><td style="color:#78909c;padding:3px 8px 3px 0">Nasc.</td><td>' + H(fmtDate(p.nasc)) + '</td></tr><tr><td style="color:#78909c;padding:3px 0">Tel.</td><td>' + H(p.tel || '—') + '</td></tr><tr><td style="color:#78909c;padding:3px 0">E-mail</td><td style="font-size:11px">' + H(p.email || '—') + '</td></tr></table>';
+  document.getElementById('pron-saude').innerHTML = '<table style="font-size:12px"><tr><td style="color:#78909c;padding:3px 8px 3px 0">Alergias</td><td>' + (p.alergias ? '<span class="badge badge-red">' + H(p.alergias) + '</span>' : '—') + '</td></tr><tr><td style="color:#78909c;padding:3px 0">Obs.</td><td style="font-size:11px">' + H(p.obs || '—') + '</td></tr></table>';
+  var appts = DB.get('agendamentos').filter(function(a) { return a.pacienteId === id; });
+  var last = appts.filter(function(a) { return a.data <= today(); }).sort(function(a, b) { return b.data.localeCompare(a.data); })[0];
+  var next = appts.filter(function(a) { return a.data >= today(); }).sort(function(a, b) { return a.data.localeCompare(b.data); })[0];
+  document.getElementById('pron-consultas').innerHTML = '<div style="font-size:22px;font-weight:600;color:#1a237e">' + appts.length + '</div><div style="font-size:11px;color:#78909c">Última: ' + (last ? H(fmtDate(last.data)) : '—') + '</div><div style="font-size:11px;color:#78909c">Próxima: ' + (next ? H(fmtDate(next.data)) : '—') + '</div>';
+  document.getElementById('pron-obs').textContent = p.obs || 'Sem observações.'; // textContent = safe
+  var an = DB.getObj('anamnese_' + id);
+  ['queixa', 'pressao', 'temp', 'historico', 'alergias', 'meds'].forEach(function(k) { var el = document.getElementById('an-' + k); if (el) el.value = an[k] || ''; });
+  loadOdontograma(id); renderPlano(); renderHistorico(id);
+  goTo('prontuario', document.querySelector('nav a[data-section="prontuario"]'));
+};
+
+// ── BUSCA GLOBAL (highlightMatch seguro) ──────────────
+highlightMatch = function(text, q) {
+  if (!text) return '';
+  var safe = H(text);
+  var safeQ = H(q);
+  var idx = safe.toLowerCase().indexOf(safeQ.toLowerCase());
+  if (idx < 0) return safe;
+  return safe.slice(0, idx) + '<span class="gsr-highlight">' + safe.slice(idx, idx + safeQ.length) + '</span>' + safe.slice(idx + safeQ.length);
+};
+
+// ── BUSCA GLOBAL (resultados) ─────────────────────────
+renderGlobalResults = function(results, q) {
+  var el = document.getElementById('gsearch-results');
+  if (!results.length) {
+    el.innerHTML = '<div class="gsr-empty"><i class="ti ti-search-off" style="font-size:24px;display:block;margin-bottom:6px;opacity:.4"></i>Nenhum resultado para "' + H(q) + '"</div>';
+    el.classList.add('open'); return;
+  }
+  var grouped = {}; results.forEach(function(r) { if (!grouped[r.cat]) grouped[r.cat] = []; grouped[r.cat].push(r); });
+  var html = '';
+  Object.keys(grouped).forEach(function(cat) {
+    var items = grouped[cat].slice(0, 5);
+    html += '<div class="gsr-section"><i class="ti ' + items[0].icon + '" style="margin-right:4px"></i>' + H(cat) + ' (' + grouped[cat].length + ')</div>';
+    items.forEach(function(r) {
+      // r.action contém código JS gerado internamente com safeId, é seguro
+      html += '<div class="gsr-item" onclick="' + r.action + ';clearGlobalSearch()">' +
+        '<div class="gsr-item-icon" style="background:' + safeCss(r.iconBg) + ';color:' + safeCss(r.iconColor) + '"><i class="ti ' + r.icon + '"></i></div>' +
+        '<div class="gsr-item-info"><div class="gsr-item-title">' + highlightMatch(r.title, q) + '</div>' +
+        '<div class="gsr-item-sub">' + H(r.sub) + '</div></div>' +
+        (r.badge ? '<span class="badge ' + (r.badgeCls || 'badge-gray') + ' gsr-item-badge">' + H(r.badge) + '</span>' : '') + '</div>';
+    });
+  });
+  el.innerHTML = html; el.classList.add('open');
+};
+
+// ── BUSCA GLOBAL (executeGlobalSearch com H()) ────────
+executeGlobalSearch = function(q) {
+  var results = [];
+  DB.get('pacientes').forEach(function(p) {
+    if ((p.nome || '').toLowerCase().indexOf(q) >= 0 || (p.tel || '').indexOf(q) >= 0 || (p.cpf || '').indexOf(q) >= 0 || (p.email || '').toLowerCase().indexOf(q) >= 0) {
+      results.push({ cat: 'Pacientes', icon: 'ti-user', iconBg: '#e3f2fd', iconColor: '#1565C0', title: p.nome, sub: [calcAge(p.nasc), p.tel, p.convenio].filter(Boolean).join(' · '), action: "openProntuario('" + safeId(p.id) + "')" });
+    }
+  });
+  var pacs = DB.get('pacientes');
+  DB.get('agendamentos').forEach(function(a) {
+    var pacNome = a.pacienteNome || '';
+    if (!pacNome) { for (var i = 0; i < pacs.length; i++) { if (pacs[i].id === a.pacienteId) { pacNome = pacs[i].nome; break; } } }
+    if (pacNome.toLowerCase().indexOf(q) >= 0 || (a.proc || '').toLowerCase().indexOf(q) >= 0 || (a.profNome || '').toLowerCase().indexOf(q) >= 0) {
+      results.push({ cat: 'Agendamentos', icon: 'ti-calendar', iconBg: '#e8f5e9', iconColor: '#2e7d32', title: pacNome + ' — ' + a.proc, sub: fmtDate(a.data) + ' ' + a.hora + ' · ' + (a.profNome || '—'), badge: a.status, badgeCls: SB[a.status] || 'badge-gray', action: "selectCalDay('" + safeId(a.data) + "');goTo('agenda',document.querySelector('nav a[data-section=\"agenda\"]'))" });
+    }
+  });
+  DB.get('profissionais').forEach(function(m) {
+    if ((m.nome || '').toLowerCase().indexOf(q) >= 0 || (m.esp || '').toLowerCase().indexOf(q) >= 0 || (m.cro || '').indexOf(q) >= 0) {
+      results.push({ cat: 'Profissionais', icon: 'ti-user-heart', iconBg: '#ede7f6', iconColor: '#6a1b9a', title: m.nome, sub: [m.esp, m.cro].filter(Boolean).join(' · '), action: "goTo('profissionais',document.querySelector('nav a[data-section=\"profissionais\"]'))" });
+    }
+  });
+  DB.get('tarefas').forEach(function(t) {
+    if ((t.desc || '').toLowerCase().indexOf(q) >= 0) {
+      results.push({ cat: 'Tarefas', icon: 'ti-checkbox', iconBg: '#fff3e0', iconColor: '#e65100', title: t.desc, sub: (t.pri || '') + ' · ' + (t.date ? fmtDate(t.date) : 'Sem data'), badge: t.done ? 'Feita' : 'Pendente', badgeCls: t.done ? 'badge-green' : 'badge-amber', action: "goTo('tarefas',document.querySelector('nav a[data-section=\"tarefas\"]'))" });
+    }
+  });
+  DB.get('documentos').forEach(function(d) {
+    if ((d.pacienteNome || '').toLowerCase().indexOf(q) >= 0 || (d.tipo || '').toLowerCase().indexOf(q) >= 0) {
+      results.push({ cat: 'Documentos', icon: 'ti-file-text', iconBg: '#fce4ec', iconColor: '#c62828', title: d.tipo + ' — ' + d.pacienteNome, sub: fmtDate(d.data) + ' · ' + (d.medicoNome || '—'), action: "goTo('documentos',document.querySelector('nav a[data-section=\"documentos\"]'))" });
+    }
+  });
+  DB.get('financeiro').forEach(function(f) {
+    if ((f.desc || '').toLowerCase().indexOf(q) >= 0 || (f.pacNome || '').toLowerCase().indexOf(q) >= 0) {
+      results.push({ cat: 'Financeiro', icon: 'ti-currency-dollar', iconBg: f.tipo === 'entrada' ? '#e8f5e9' : '#ffebee', iconColor: f.tipo === 'entrada' ? '#2e7d32' : '#c62828', title: f.desc, sub: fmtDate(f.data) + ' · ' + fmtMoney(f.val), badge: f.tipo === 'entrada' ? 'Entrada' : 'Saída', badgeCls: f.tipo === 'entrada' ? 'badge-green' : 'badge-red', action: "goTo('financeiro',document.querySelector('nav a[data-section=\"financeiro\"]'))" });
+    }
+  });
+  DB.get('estoque').forEach(function(e) {
+    if ((e.nome || '').toLowerCase().indexOf(q) >= 0 || (e.forn || '').toLowerCase().indexOf(q) >= 0) {
+      var st = getEstStatus(e);
+      results.push({ cat: 'Estoque', icon: 'ti-package', iconBg: '#eceff1', iconColor: '#546e7a', title: e.nome, sub: e.qtd + ' ' + e.un + ' · ' + (e.forn || '—'), badge: st, badgeCls: st === 'Crítico' ? 'badge-red' : st === 'Atenção' ? 'badge-amber' : 'badge-green', action: "goTo('estoque',document.querySelector('nav a[data-section=\"estoque\"]'))" });
+    }
+  });
+  renderGlobalResults(results, q);
+};
+
+// ── LEMBRETES ─────────────────────────────────────────
+renderReminderList = function(appts, nowM, pacs) {
+  var el = document.getElementById('reminder-list'); if (!el) return;
+  if (!appts.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:#90a4ae;font-size:12px"><i class="ti ti-bell-off" style="font-size:24px;display:block;margin-bottom:6px;opacity:.4"></i>Nenhuma consulta próxima</div>'; return; }
+  el.innerHTML = appts.map(function(a) {
+    var pn = a.pacienteNome || ''; if (!pn) { for (var i = 0; i < pacs.length; i++) { if (pacs[i].id === a.pacienteId) { pn = pacs[i].nome; break; } } }
+    var diff = timeToMin(a.hora) - nowM;
+    var cls = diff <= 5 ? 'imminent' : diff <= 15 ? 'urgent' : '';
+    var cdCls = diff <= 5 ? 'red' : diff <= 15 ? 'amber' : 'green';
+    return '<div class="reminder-item ' + cls + '"><div class="ri-time">' + H(a.hora) + '<small>' + (parseInt(a.duracao) || 30) + ' min</small></div>' +
+      '<div class="ri-info"><div class="ri-name">' + H(pn) + '</div><div class="ri-sub">' + H(a.proc) + ' · ' + H(a.profNome || '—') + ' · ' + H(a.sala) + '</div></div>' +
+      '<div class="ri-countdown ' + cdCls + '">' + diff + ' min</div></div>';
+  }).join('');
+};
+
+// ── FLUXO DE CAIXA ────────────────────────────────────
+renderFluxoCaixa = function() {
+  var contas = DB.get('contas'); var td = today(); var now = new Date(td + 'T00:00:00');
+  function addDays(n) { var d = new Date(now); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]; }
+  var d30 = addDays(30), d60 = addDays(60), d90 = addDays(90);
+  function calcPeriod(ate) {
+    var recP = contas.filter(function(c) { return c.tipo === 'receber' && c.status !== 'pago' && c.vencimento >= td && c.vencimento <= ate; }).reduce(function(s, c) { return s + Number(c.val); }, 0);
+    var pagP = contas.filter(function(c) { return c.tipo === 'pagar' && c.status !== 'pago' && c.vencimento >= td && c.vencimento <= ate; }).reduce(function(s, c) { return s + Number(c.val); }, 0);
+    var agRec = DB.get('agendamentos').filter(function(a) { return a.data >= td && a.data <= ate && Number(a.valor) > 0 && a.status !== 'Faltou'; }).reduce(function(s, a) { return s + Number(a.valor); }, 0);
+    return { rec: recP + agRec, desp: pagP, net: (recP + agRec) - pagP };
+  }
+  var p30 = calcPeriod(d30), p60 = calcPeriod(d60), p90 = calcPeriod(d90);
+  var maxVal = Math.max(p90.rec, p90.desp, 1);
+  var pEl = document.getElementById('fc-periods');
+  if (pEl) {
+    var periods = [{ label: 'Próximos 30 dias', data: p30 }, { label: 'Próximos 60 dias', data: p60 }, { label: 'Próximos 90 dias', data: p90 }];
+    pEl.innerHTML = periods.map(function(p) {
+      var netCls = p.data.net >= 0 ? 'pos' : 'neg';
+      return '<div class="fc-period"><div class="fc-period-label">' + H(p.label) + '</div>' +
+        '<div class="fc-bar-row"><div class="fc-bar-label">Receita</div><div class="fc-bar"><div class="fc-bar-fill income" style="width:' + Math.round(p.data.rec / maxVal * 100) + '%"></div></div><div class="fc-bar-val pos">' + H(fmtMoney(p.data.rec)) + '</div></div>' +
+        '<div class="fc-bar-row"><div class="fc-bar-label">Despesas</div><div class="fc-bar"><div class="fc-bar-fill expense" style="width:' + Math.round(p.data.desp / maxVal * 100) + '%"></div></div><div class="fc-bar-val neg">' + H(fmtMoney(p.data.desp)) + '</div></div>' +
+        '<div class="fc-net ' + netCls + '">' + (p.data.net >= 0 ? '+' : '') + H(fmtMoney(p.data.net)) + '</div><div class="fc-net-label">Saldo projetado</div></div>';
+    }).join('');
+  }
+  var bEl = document.getElementById('fc-bars');
+  if (bEl) {
+    var months = {};
+    contas.filter(function(c) { return c.status !== 'pago' && c.vencimento >= td && c.vencimento <= d90; }).forEach(function(c) {
+      var m = (c.vencimento || '').slice(0, 7); if (!months[m]) months[m] = { rec: 0, desp: 0 };
+      if (c.tipo === 'receber') months[m].rec += Number(c.val); else months[m].desp += Number(c.val);
+    });
+    DB.get('agendamentos').filter(function(a) { return a.data >= td && a.data <= d90 && Number(a.valor) > 0 && a.status !== 'Faltou'; }).forEach(function(a) {
+      var m = (a.data || '').slice(0, 7); if (!months[m]) months[m] = { rec: 0, desp: 0 }; months[m].rec += Number(a.valor);
+    });
+    var mKeys = Object.keys(months).sort();
+    var mMax = mKeys.reduce(function(mx, k) { return Math.max(mx, months[k].rec, months[k].desp); }, 1);
+    var MN = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    if (!mKeys.length) { bEl.innerHTML = '<div class="empty-state" style="padding:20px"><i class="ti ti-chart-bar"></i>Sem projeções</div>'; }
+    else bEl.innerHTML = mKeys.map(function(k) {
+      var d = months[k]; var parts = k.split('-'); var label = MN[parseInt(parts[1])] + '/' + parts[0];
+      return '<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:600;color:#1a237e;margin-bottom:6px">' + H(label) + '</div>' +
+        '<div class="fc-bar-row"><div class="fc-bar-label" style="color:#2e7d32">Receita</div><div class="fc-bar"><div class="fc-bar-fill income" style="width:' + Math.round(d.rec / mMax * 100) + '%"></div></div><div class="fc-bar-val pos">' + H(fmtMoney(d.rec)) + '</div></div>' +
+        '<div class="fc-bar-row"><div class="fc-bar-label" style="color:#c62828">Despesa</div><div class="fc-bar"><div class="fc-bar-fill expense" style="width:' + Math.round(d.desp / mMax * 100) + '%"></div></div><div class="fc-bar-val neg">' + H(fmtMoney(d.desp)) + '</div></div></div>';
+    }).join('');
+  }
+  var tEl = document.getElementById('fc-timeline');
+  if (tEl) {
+    var items = contas.filter(function(c) { return c.status !== 'pago' && c.vencimento >= td && c.vencimento <= d90; }).map(function(c) {
+      return { data: c.vencimento, desc: c.desc + (c.pacNome ? ' · ' + c.pacNome : ''), val: Number(c.val), tipo: c.tipo };
+    }).sort(function(a, b) { return a.data.localeCompare(b.data); });
+    if (!items.length) tEl.innerHTML = '<div class="empty-state" style="padding:20px"><i class="ti ti-list"></i>Nenhum vencimento</div>';
+    else tEl.innerHTML = items.map(function(it) {
+      var isRec = it.tipo === 'receber'; var vencido = it.data < td;
+      return '<div class="fc-timeline-item"><div class="fc-tl-date"' + (vencido ? ' style="color:#c62828"' : '') + '>' + H(fmtDate(it.data)) + '</div>' +
+        '<div class="fc-tl-desc">' + H(it.desc) + '</div><span class="badge ' + (isRec ? 'badge-green' : 'badge-red') + '" style="font-size:10px;margin-right:6px">' + (isRec ? 'Receber' : 'Pagar') + '</span>' +
+        '<div class="fc-tl-val ' + (isRec ? 'pos' : 'neg') + '">' + (isRec ? '+' : '-') + H(fmtMoney(it.val)) + '</div></div>';
+    }).join('');
+  }
+};
+
+// ── PARCELAS ──────────────────────────────────────────
+renderParcelas = function() {
+  var contas = DB.get('contas');
+  var grupos = {};
+  contas.filter(function(c) { return c.parcelaGrupo; }).forEach(function(c) {
+    if (!grupos[c.parcelaGrupo]) grupos[c.parcelaGrupo] = { id: c.parcelaGrupo, desc: c.parcelaDesc || c.desc, pacNome: c.pacNome || '', profNome: c.parcelaProfNome || '', total: 0, pago: 0, items: [], qtd: c.parcelaTotal || 0 };
+    var g = grupos[c.parcelaGrupo]; g.total += Number(c.val); if (c.status === 'pago') g.pago += Number(c.val); g.items.push(c);
+  });
+  var el = document.getElementById('parcelas-list'); if (!el) return;
+  var gList = Object.values(grupos);
+  if (!gList.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-receipt-2"></i>Nenhum parcelamento cadastrado</div>'; return; }
+  el.innerHTML = gList.map(function(g) {
+    g.items.sort(function(a, b) { return (a.vencimento || '').localeCompare(b.vencimento || ''); });
+    var pagas = g.items.filter(function(c) { return c.status === 'pago'; }).length;
+    var totalItems = g.items.length;
+    var pct = totalItems > 0 ? Math.round(pagas / totalItems * 100) : 0;
+    return '<div class="parc-group"><div class="parc-group-head"><div style="width:44px;height:44px;border-radius:10px;background:#e3f2fd;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-receipt-2" style="font-size:20px;color:#1565C0"></i></div>' +
+      '<div class="parc-group-info"><div class="parc-group-title">' + H(g.desc) + '</div><div class="parc-group-sub">' + H(g.pacNome) + (g.profNome ? ' · ' + H(g.profNome) : '') + '</div></div>' +
+      '<div style="text-align:right"><div style="font-size:16px;font-weight:700;color:#1a237e">' + H(fmtMoney(g.total)) + '</div><div style="font-size:11px;color:#2e7d32">Pago: ' + H(fmtMoney(g.pago)) + '</div></div></div>' +
+      '<div class="parc-progress"><div class="parc-progress-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="parc-stats"><span><b>' + pagas + '</b>/' + totalItems + ' pagas</span><span><b>' + pct + '%</b> concluído</span><span>Restante: <b style="color:#e65100">' + H(fmtMoney(g.total - g.pago)) + '</b></span></div>' +
+      '<div class="parc-items">' + g.items.map(function(c) {
+        var st = c.status === 'pago' ? 'paid' : (c.vencimento < today() ? 'overdue' : 'pending');
+        var stLabel = st === 'paid' ? 'Pago' : (st === 'overdue' ? 'Vencido' : 'Pendente');
+        var stBadge = st === 'paid' ? 'badge-green' : (st === 'overdue' ? 'badge-red' : 'badge-amber');
+        var n = c.parcelaN === 0 ? 'E' : c.parcelaN;
+        var sid = safeId(c.id);
+        return '<div class="parc-item"><div class="parc-item-n ' + st + '">' + n + '</div><div style="flex:1;font-size:12px">' + H(c.desc) + '</div>' +
+          '<div style="font-size:11px;color:#78909c;min-width:70px">' + H(fmtDate(c.vencimento)) + '</div><span class="badge ' + stBadge + '" style="font-size:10px">' + stLabel + '</span>' +
+          '<div style="font-weight:600;min-width:70px;text-align:right;font-size:12px">' + H(fmtMoney(c.val)) + '</div>' +
+          (st !== 'paid' ? '<button class="btn btn-success btn-sm" style="padding:3px 6px" onclick="pagarParcelaItem(\'' + sid + '\')" title="Pagar"><i class="ti ti-check"></i></button>' : '') + '</div>';
+      }).join('') + '</div></div>';
+  }).join('');
+};
+
+// ── PRÉVIA PARCELAMENTO ───────────────────────────────
+calcParcelaPreview = function() {
+  var total = parseFloat((document.getElementById('parc-valor') || {}).value) || 0;
+  var qtd = parseInt((document.getElementById('parc-qtd') || {}).value) || 6;
+  var entrada = parseFloat((document.getElementById('parc-entrada') || {}).value) || 0;
+  var inicio = (document.getElementById('parc-inicio') || {}).value || today();
+  var pv = document.getElementById('parc-preview'); if (!pv) return;
+  if (total <= 0) { pv.style.display = 'none'; return; }
+  var restante = total - entrada; if (restante < 0) restante = 0;
+  var valorParc = Math.round(restante / qtd * 100) / 100;
+  var ajuste = Math.round((restante - valorParc * qtd) * 100) / 100;
+  var html = '<div style="font-weight:600;color:#1a237e;margin-bottom:8px"><i class="ti ti-receipt-2" style="margin-right:4px"></i>Prévia do Parcelamento</div>';
+  html += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px"><span><b>Total:</b> ' + H(fmtMoney(total)) + '</span>';
+  if (entrada > 0) html += '<span><b>Entrada:</b> ' + H(fmtMoney(entrada)) + '</span>';
+  html += '<span><b>Restante:</b> ' + H(fmtMoney(restante)) + '</span><span><b>' + qtd + 'x</b> de ' + H(fmtMoney(valorParc)) + '</span></div>';
+  html += '<div style="max-height:180px;overflow-y:auto">';
+  var d = new Date(inicio + 'T00:00:00');
+  if (entrada > 0) html += '<div class="parc-item"><div class="parc-item-n pending">E</div><div style="flex:1">Entrada</div><div style="font-size:11px;color:#78909c">' + H(fmtDate(inicio)) + '</div><div style="font-weight:600;min-width:80px;text-align:right">' + H(fmtMoney(entrada)) + '</div></div>';
+  for (var i = 0; i < qtd; i++) {
+    var dd = new Date(d); dd.setMonth(dd.getMonth() + i); var ds = dd.toISOString().split('T')[0];
+    var vp = valorParc + (i === qtd - 1 ? ajuste : 0);
+    html += '<div class="parc-item"><div class="parc-item-n pending">' + (i + 1) + '</div><div style="flex:1">Parcela ' + (i + 1) + '/' + qtd + '</div><div style="font-size:11px;color:#78909c">' + H(fmtDate(ds)) + '</div><div style="font-weight:600;min-width:80px;text-align:right">' + H(fmtMoney(vp)) + '</div></div>';
+  }
+  html += '</div>'; pv.innerHTML = html; pv.style.display = 'block';
+};
+
+// ── RECEITA PREVIEW ───────────────────────────────────
+updateReceitaPreview = function() {
+  var pacId = document.getElementById('rec-pac').value;
+  var medId = document.getElementById('rec-medico').value;
+  var pacs = DB.get('pacientes'); var pac = null; for (var i = 0; i < pacs.length; i++) { if (pacs[i].id === pacId) { pac = pacs[i]; break; } }
+  var meds = DB.get('profissionais'); var med = null; for (var j = 0; j < meds.length; j++) { if (meds[j].id === medId) { med = meds[j]; break; } }
+  var mN = med ? (med.recNome || med.nome) : 'Consultório';
+  var mS = med ? [med.cro, med.recEnd].filter(Boolean).join(' · ') : '—';
+  document.getElementById('rec-header').innerHTML = '<h2>' + H(mN) + '</h2><p>' + H(mS) + '</p>';
+  document.getElementById('rec-footer').textContent = mN + (med && med.cro ? ' · ' + med.cro : '');
+  var mv = document.getElementById('rec-med').value || '...';
+  var dv = document.getElementById('rec-data').value;
+  document.getElementById('rec-preview').innerHTML = '<b>Paciente:</b> ' + H(pac ? pac.nome : '—') + ' · <b>Data:</b> ' + H(fmtDate(dv)) + '<br><br><b>Rx:</b><br>' + H(mv).replace(/\n/g, '<br>');
+};
+
+// ── RELATÓRIOS ────────────────────────────────────────
+gerarRelatorio = function(tipo) {
+  if (tipo !== 'atual') relAtual = tipo;
+  var ini = document.getElementById('rel-inicio'), fim = document.getElementById('rel-fim');
+  if (!ini.value) { var d = new Date(); ini.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01'; }
+  if (!fim.value) fim.value = today();
+  var inicio = ini.value, fim2 = fim.value;
+  var el = document.getElementById('rel-content');
+  if (relAtual === 'receita') {
+    var fin = DB.get('financeiro').filter(function(f) { return f.data >= inicio && f.data <= fim2 && f.tipo === 'entrada' && f.status === 'pago'; });
+    var byMes = {}; fin.forEach(function(f) { var m = (f.data || '').slice(0, 7); if (!byMes[m]) byMes[m] = { mes: m, total: 0 }; byMes[m].total += Number(f.val); });
+    var rows = Object.values(byMes).sort(function(a, b) { return a.mes.localeCompare(b.mes); });
+    var total = rows.reduce(function(s, r) { return s + r.total; }, 0);
+    el.innerHTML = '<div class="card"><div class="card-title"><i class="ti ti-chart-line"></i>Receita Mensal</div><table class="rel-table"><thead><tr><th>Mês</th><th>Total</th></tr></thead><tbody>' +
+      rows.map(function(r) { return '<tr><td>' + H(r.mes) + '</td><td><b>' + H(fmtMoney(r.total)) + '</b></td></tr>'; }).join('') +
+      '<tr style="background:#e3f2fd;font-weight:700"><td>TOTAL</td><td>' + H(fmtMoney(total)) + '</td></tr></tbody></table></div>';
+  } else if (relAtual === 'atendimentos') {
+    var appts = DB.get('agendamentos').filter(function(a) { return a.data >= inicio && a.data <= fim2; });
+    var ttl = appts.length; var pres = appts.filter(function(a) { return a.status === 'Presente' || a.status === 'Chegou'; }).length;
+    el.innerHTML = '<div class="summary-grid"><div class="metric"><div class="metric-label">Total</div><div class="metric-val">' + ttl + '</div></div><div class="metric green"><div class="metric-label">Realizados</div><div class="metric-val">' + pres + '</div></div><div class="metric amber"><div class="metric-label">Taxa</div><div class="metric-val">' + (ttl ? Math.round(pres / ttl * 100) : 0) + '%</div></div></div>';
+  } else if (relAtual === 'produtividade') {
+    var meds = DB.get('profissionais');
+    var appts2 = DB.get('agendamentos').filter(function(a) { return a.data >= inicio && a.data <= fim2; });
+    var dados = meds.map(function(m) { var ats = appts2.filter(function(a) { return a.profId === m.id; }); var pr = ats.filter(function(a) { return a.status === 'Presente' || a.status === 'Chegou'; }); return { m: m, total: ats.length, pres: pr.length, rec: pr.reduce(function(s, a) { return s + Number(a.valor || 0); }, 0) }; });
+    el.innerHTML = '<div class="card"><div class="card-title"><i class="ti ti-award"></i>Produtividade</div><table class="rel-table"><thead><tr><th>Profissional</th><th>Agend.</th><th>Realiz.</th><th>Receita</th></tr></thead><tbody>' +
+      dados.map(function(d) { return '<tr><td><b>' + H(d.m.nome) + '</b></td><td>' + d.total + '</td><td>' + d.pres + '</td><td>' + H(fmtMoney(d.rec)) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+  }
+};
+
+// ── USUÁRIOS (versão final completa com segurança + H()) ──────
+renderUsuarios = function() {
+  var list = DB.get('usuarios'), perfis = DB.get('perfis'), consultorios = DB.get('consultorios');
+  var isMst = isMaster(); var isAdm = !isMst && currentUser && currentUser.perfil === 'admin';
+  var fcEl = document.getElementById('usr-filter-clinic');
+  if (fcEl) {
+    if (isMst) { var cv = fcEl.value; fcEl.innerHTML = '<option value="">Todos consultórios</option>' + consultorios.map(function(c) { return '<option value="' + safeId(c.id) + '">' + H(c.nome) + '</option>'; }).join(''); fcEl.value = cv; }
+    else fcEl.style.display = 'none';
+  }
+  var ufr = document.getElementById('usr-filter-row'); if (ufr) ufr.style.display = (isMst || isAdm) ? 'flex' : 'none';
+  var filterClinic = isMst ? (fcEl || {}).value : '';
+  var filterStatus = (document.getElementById('usr-filter-status') || {}).value || '';
+  if (!isMst) list = list.filter(function(u) { return u.consultorioId === (currentUser ? currentUser.consultorioId : ''); });
+  if (filterClinic) list = list.filter(function(u) { return u.consultorioId === filterClinic; });
+  if (filterStatus === 'pendente') list = list.filter(function(u) { return !u.aprovado; });
+  else if (filterStatus) list = list.filter(function(u) { return u.aprovado && u.status === filterStatus; });
+  list.sort(function(a, b) { if (!a.aprovado && b.aprovado) return -1; if (a.aprovado && !b.aprovado) return 1; return (a.nome || '').localeCompare(b.nome || ''); });
+  var el = document.getElementById('usuarios-list');
+  if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-users"></i>Nenhum usuário encontrado</div>'; return; }
+  var rC = { master: 'role-master', admin: 'role-admin', dentista: 'role-dentista', recepcionista: 'role-recep', financeiro: 'role-financeiro' };
+  var groups = {}; list.forEach(function(u) { var role = u.masterAdmin ? 'master' : (u.perfil || 'outro'); if (!groups[role]) groups[role] = []; groups[role].push(u); });
+  var roleOrder = ['master', 'admin', 'dentista', 'recepcionista', 'financeiro', 'outro'];
+  var roleLabels = { master: 'Administrador Master', admin: 'Administradores', dentista: 'Dentistas', recepcionista: 'Recepcionistas', financeiro: 'Financeiro', outro: 'Outros' };
+  var roleIcons = { master: 'ti-crown', admin: 'ti-shield-check', dentista: 'ti-user-heart', recepcionista: 'ti-user', financeiro: 'ti-coin', outro: 'ti-user' };
+  var html = '';
+  roleOrder.forEach(function(role) {
+    if (!groups[role] || !groups[role].length) return;
+    html += '<div class="usr-role-section"><i class="ti ' + roleIcons[role] + '"></i>' + H(roleLabels[role]) + ' (' + groups[role].length + ')</div>';
+    html += groups[role].map(function(u) {
+      var p = null; for (var i = 0; i < perfis.length; i++) { if (perfis[i].id === u.perfil) { p = perfis[i]; break; } }
+      var rc = rC[u.masterAdmin ? 'master' : u.perfil] || 'role-recep';
+      var isPending = !u.aprovado;
+      var cltNome = u.consultorioNome || 'Sem consultório';
+      if (u.masterAdmin) cltNome = 'Todos os consultórios';
+      var sid = safeId(u.id);
+      var actions = '';
+      if (isMst && isPending) actions += '<button class="btn btn-success btn-sm" onclick="aprovarUsuario(\'' + sid + '\')" title="Aprovar"><i class="ti ti-check"></i></button>';
+      if (isMst) actions += '<button class="btn btn-outline btn-sm" onclick="editUsuario(\'' + sid + '\')"><i class="ti ti-edit"></i></button>';
+      else if (isAdm && !u.masterAdmin && u.id !== currentUser.id) actions += '<button class="btn btn-outline btn-sm" onclick="editUsuario(\'' + sid + '\')"><i class="ti ti-edit"></i></button>';
+      if (isMst && u.id !== currentUser.id) actions += '<button class="btn btn-danger btn-sm" onclick="deleteUsuario(\'' + sid + '\')" title="Excluir"><i class="ti ti-trash"></i></button>';
+      return '<div class="user-card' + (isPending ? ' pending' : '') + '"><div class="patient-avatar" style="background:' + safeCss(avatarColor(u.nome)) + ';width:40px;height:40px;font-size:13px;min-width:40px">' + H(initials(u.nome)) + '</div>' +
+        '<div class="user-card-info"><div class="user-card-name">' + H(u.nome) + (u.masterAdmin ? ' <span class="master-badge-top"><i class="ti ti-crown" style="font-size:10px"></i>Master</span>' : '') + '</div>' +
+        '<div class="user-card-sub">' + H(u.email || '—') + ' · <span class="role-badge ' + rc + '">' + H(u.masterAdmin ? 'Master' : (p ? p.nome : '—')) + '</span> · <span style="font-size:10px;color:#546e7a">' + H(cltNome) + '</span></div></div>' +
+        (isPending ? '<span class="badge badge-amber">Pendente</span>' : '<span class="badge ' + (u.status === 'ativo' ? 'badge-green' : 'badge-red') + '">' + H(u.status) + '</span>') + actions + '</div>';
+    }).join('');
+  });
+  el.innerHTML = html;
+};
+
+// ── PERFIS (versão final com restrições admin + H()) ──────────
+renderPerfis = function() {
+  var el = document.getElementById('perfis-list');
+  var actionsRow = document.querySelector('#section-perfis .actions-row');
+  if (!isMaster() && !isAdmin()) {
+    if (el) el.innerHTML = '<div class="access-denied"><i class="ti ti-lock"></i><div style="font-size:16px;font-weight:600;color:#c62828">Acesso Negado</div></div>';
+    if (actionsRow) actionsRow.style.display = 'none'; return;
+  }
+  var PERFIS_RESTRITOS = ['master', 'admin'];
+  if (isMaster()) {
+    if (actionsRow) actionsRow.style.display = 'flex';
+    var list = DB.get('perfis');
+    if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-shield"></i>Nenhum perfil</div>'; return; }
+    el.innerHTML = list.map(function(p) {
+      var sid = safeId(p.id);
+      var tags = (p.perms || []).map(function(s) { var sc = null; for (var i = 0; i < ALL_SECTIONS.length; i++) { if (ALL_SECTIONS[i].id === s) { sc = ALL_SECTIONS[i]; break; } } return sc ? '<span class="tag badge-blue">' + H(sc.label) + '</span>' : ''; }).join('');
+      return '<div class="card" style="margin:0"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="width:40px;height:40px;border-radius:10px;background:#e3f2fd;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-shield-check" style="font-size:20px;color:#1565C0"></i></div>' +
+        '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#1a237e">' + H(p.nome) + '</div><div style="font-size:11px;color:#78909c">' + H(p.desc || '—') + '</div></div>' +
+        '<div style="display:flex;gap:4px"><button class="btn btn-outline btn-sm" onclick="editPerfil(\'' + sid + '\')"><i class="ti ti-edit"></i></button>' +
+        (sid !== 'admin' && sid !== 'master' ? '<button class="btn btn-danger btn-sm" onclick="deletePerfil(\'' + sid + '\')"><i class="ti ti-trash"></i></button>' : '') + '</div></div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px">' + tags + '</div></div>';
+    }).join('');
+  } else {
+    if (actionsRow) actionsRow.style.display = 'none';
+    var list2 = DB.get('perfis').filter(function(p) { return PERFIS_RESTRITOS.indexOf(p.id) < 0; });
+    if (!list2.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-shield"></i>Nenhum perfil disponível</div>'; return; }
+    el.innerHTML = list2.map(function(p) {
+      var sid = safeId(p.id);
+      var tags = (p.perms || []).map(function(s) { var sc = null; for (var i = 0; i < ALL_SECTIONS.length; i++) { if (ALL_SECTIONS[i].id === s) { sc = ALL_SECTIONS[i]; break; } } return sc ? '<span class="tag badge-blue">' + H(sc.label) + '</span>' : ''; }).join('');
+      return '<div class="card" style="margin:0"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="width:40px;height:40px;border-radius:10px;background:#e3f2fd;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-shield-check" style="font-size:20px;color:#1565C0"></i></div>' +
+        '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#1a237e">' + H(p.nome) + '</div><div style="font-size:11px;color:#78909c">' + H(p.desc || '—') + '</div></div>' +
+        '<div style="display:flex;gap:4px"><button class="btn btn-outline btn-sm" onclick="editPerfil(\'' + sid + '\')"><i class="ti ti-edit"></i></button></div></div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px">' + tags + '</div></div>';
+    }).join('');
+  }
+};
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  5. HARDENING — PROTEÇÃO DE VARIÁVEIS CRÍTICAS      ║
+// ╚══════════════════════════════════════════════════════╝
+
+// Intercepta tentativa de manipulação do currentUser via DevTools
+(function() {
+  var _originalCurrentUser = null;
+  var _integrityCheckInterval = null;
+
+  // Snapshot do usuário após login para comparação
+  var _secOrigEnterApp = enterApp;
+  enterApp = function(authUser, regName) {
+    return _secOrigEnterApp(authUser, regName).then(function() {
+      if (currentUser) {
+        _originalCurrentUser = {
+          id: currentUser.id,
+          masterAdmin: currentUser.masterAdmin,
+          perfil: currentUser.perfil,
+          consultorioId: currentUser.consultorioId,
+          status: currentUser.status,
+          aprovado: currentUser.aprovado
+        };
+        startIntegrityCheck();
+      }
+    }).catch(function() {
+      if (currentUser) {
+        _originalCurrentUser = {
+          id: currentUser.id,
+          masterAdmin: currentUser.masterAdmin,
+          perfil: currentUser.perfil,
+          consultorioId: currentUser.consultorioId,
+          status: currentUser.status,
+          aprovado: currentUser.aprovado
+        };
+        startIntegrityCheck();
+      }
+    });
+  };
+
+  function startIntegrityCheck() {
+    if (_integrityCheckInterval) clearInterval(_integrityCheckInterval);
+    _integrityCheckInterval = setInterval(function() {
+      if (!currentUser || !_originalCurrentUser) return;
+
+      // Verificar se campos críticos foram alterados via DevTools
+      var tampered = false;
+      if (currentUser.masterAdmin !== _originalCurrentUser.masterAdmin) {
+        console.error('SEGURANÇA: masterAdmin adulterado! Restaurando.');
+        currentUser.masterAdmin = _originalCurrentUser.masterAdmin;
+        tampered = true;
+      }
+      if (currentUser.perfil !== _originalCurrentUser.perfil) {
+        console.error('SEGURANÇA: perfil adulterado! Restaurando.');
+        currentUser.perfil = _originalCurrentUser.perfil;
+        tampered = true;
+      }
+      if (currentUser.id !== _originalCurrentUser.id) {
+        console.error('SEGURANÇA: id adulterado! Forçando logout.');
+        doLogout();
+        return;
+      }
+      if (!currentUser.masterAdmin && currentUser.consultorioId !== _originalCurrentUser.consultorioId) {
+        console.error('SEGURANÇA: consultorioId adulterado! Restaurando.');
+        currentUser.consultorioId = _originalCurrentUser.consultorioId;
+        _currentClinicId = _originalCurrentUser.consultorioId || '__sem_consultorio__';
+        tampered = true;
+      }
+
+      if (tampered) {
+        applyPermissions();
+        showNotif('Tentativa de alteração bloqueada', 'error');
+      }
+    }, 2000);
+  }
+
+  // Limpar ao logout
+  var _secLogout = doLogout;
+  doLogout = function() {
+    _originalCurrentUser = null;
+    if (_integrityCheckInterval) clearInterval(_integrityCheckInterval);
+    _secLogout();
+  };
+})();
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  6. SYNC DO MAPA DE RENDERS                        ║
+// ╚══════════════════════════════════════════════════════╝
+
+renders.dashboard = renderDashboard;
+renders.pacientes = renderPacientes;
+renders.agenda = function() { renderCal(); setAgendaView(agendaView, true); };
+renders.documentos = renderDocumentos;
+renders.exames = renderExames;
+renders.tarefas = renderTarefas;
+renders.aniversariantes = renderAniversariantes;
+renders.profissionais = renderProfissionais;
+renders.financeiro = function() { renderFinanceiro(); renderContas(); };
+renders.estoque = renderEstoque;
+renders.consultorios = renderConsultorios;
+renders.usuarios = renderUsuarios;
+renders.perfis = renderPerfis;
+renders.logs = renderLogs;
+renders.relatorios = function() {
+  var rp = document.getElementById('rel-prof');
+  if (rp) { var meds = DB.get('profissionais'); rp.innerHTML = '<option value="">Todos</option>' + meds.map(function(m) { return '<option value="' + safeId(m.id) + '">' + H(m.nome) + '</option>'; }).join(''); }
+  gerarRelatorio('atual');
+};
+
+// ══════════════════════════════════════════════════════════════
+// ██  FIM DO PATCH DE SEGURANÇA v4.1                         ██
+// ══════════════════════════════════════════════════════════════
+console.log('%c[SEGURANÇA] Patch v4.1 carregado — XSS + Validação + Hardening', 'color:#2e7d32;font-weight:bold;font-size:12px');
+
+
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
   if(authUser){setLoginLoading(true);enterApp(authUser)}
