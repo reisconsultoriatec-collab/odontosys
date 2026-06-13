@@ -6441,6 +6441,66 @@ initApp = function() {
 // ══════════════════════════════════════════════════════════════════
 console.log('%c[MELHORIA] Docs PDF + Impressão + Tema Escuro carregados', 'color:#e65100;font-weight:bold;font-size:12px');
 
+// ══════════════════════════════════════════════════════════════════
+// ██  REGRA: Ocultar informações financeiras no Dashboard        ██
+// ██  para perfis Recepcionista e Dentista                       ██
+// ██  Colar APÓS todos os patches anteriores,                    ██
+// ██  ANTES do auth.onAuthStateChanged                           ██
+// ══════════════════════════════════════════════════════════════════
+
+function isFinanceRestricted() {
+  if (!currentUser) return false;
+  if (currentUser.masterAdmin) return false;
+  var perfil = currentUser.perfil || '';
+  return perfil === 'recepcionista' || perfil === 'dentista';
+}
+
+var _finRestrictDash = renderDashboard;
+renderDashboard = function() {
+  _finRestrictDash();
+
+  var restricted = isFinanceRestricted();
+
+  // 1. KPI Ticket Médio — ocultar
+  var kpiTicket = document.getElementById('kpi-ticket');
+  if (kpiTicket) kpiTicket.closest('.kpi-card').style.display = restricted ? 'none' : '';
+
+  // 2. Card "Receita Mês" no summary-grid — ocultar também
+  var dashReceita = document.getElementById('dash-receita');
+  if (dashReceita) dashReceita.closest('.metric').style.display = restricted ? 'none' : '';
+
+  // 3. Gráfico Receita Mensal — ocultar o chart-card inteiro
+  var chartReceita = document.getElementById('chart-receita');
+  if (chartReceita) chartReceita.closest('.chart-card').style.display = restricted ? 'none' : '';
+
+  // 4. Gráfico Receita por Categoria — ocultar
+  var chartCat = document.getElementById('chart-categorias');
+  if (chartCat) chartCat.closest('.chart-card').style.display = restricted ? 'none' : '';
+
+  // 5. Inadimplência — ocultar
+  var chartInad = document.getElementById('chart-inadimplencia');
+  if (chartInad) chartInad.closest('.chart-card').style.display = restricted ? 'none' : '';
+
+  // Ajustar grid para não deixar espaço vazio quando itens somem
+  if (restricted) {
+    // Se ambos os gráficos de uma linha sumiram, esconder a linha inteira
+    document.querySelectorAll('#dashboard-charts .charts-grid').forEach(function(grid) {
+      var visible = grid.querySelectorAll('.chart-card');
+      var allHidden = true;
+      for (var i = 0; i < visible.length; i++) {
+        if (visible[i].style.display !== 'none') { allHidden = false; break; }
+      }
+      grid.style.display = allHidden ? 'none' : '';
+    });
+  } else {
+    document.querySelectorAll('#dashboard-charts .charts-grid').forEach(function(grid) {
+      grid.style.display = '';
+    });
+  }
+};
+
+renders.dashboard = renderDashboard;
+
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
   if(authUser){setLoginLoading(true);enterApp(authUser)}
