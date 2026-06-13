@@ -5134,6 +5134,1313 @@ doLogout = function() {
 // ══════════════════════════════════════════════════════════════════
 console.log('%c[UI] Fix Login aplicado — Botão + Toggle Senha', 'color:#6a1b9a;font-weight:bold');
 
+// ══════════════════════════════════════════════════════════════════
+// ██  MELHORIA 1: Dashboard com Gráficos (Chart.js)              ██
+// ██  MELHORIA 2: Busca Avançada por Período na Agenda           ██
+// ██  Colar APÓS os patches de segurança,                        ██
+// ██  ANTES do auth.onAuthStateChanged                           ██
+// ══════════════════════════════════════════════════════════════════
+
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  1. DASHBOARD COM GRÁFICOS + KPIs                   ║
+// ╚══════════════════════════════════════════════════════╝
+
+// — Injetar estrutura HTML do dashboard de gráficos —
+(function() {
+  var dashSection = document.getElementById('section-dashboard');
+  if (!dashSection) return;
+
+  // Criar container de gráficos após o conteúdo existente
+  var chartsDiv = document.createElement('div');
+  chartsDiv.id = 'dashboard-charts';
+  chartsDiv.innerHTML =
+    // KPIs avançados
+    '<div class="kpi-grid" id="kpi-grid">' +
+      '<div class="kpi-card"><div class="kpi-val" id="kpi-taxa" style="color:#2e7d32">0%</div><div class="kpi-label">Taxa Comparecimento</div><div class="kpi-trend neutral" id="kpi-taxa-trend">—</div></div>' +
+      '<div class="kpi-card"><div class="kpi-val" id="kpi-ticket" style="color:#1565C0">R$0</div><div class="kpi-label">Ticket Médio</div><div class="kpi-trend neutral" id="kpi-ticket-trend">—</div></div>' +
+      '<div class="kpi-card"><div class="kpi-val" id="kpi-novos" style="color:#e65100">0</div><div class="kpi-label">Novos Pacientes (Mês)</div><div class="kpi-trend neutral" id="kpi-novos-trend">—</div></div>' +
+      '<div class="kpi-card"><div class="kpi-val" id="kpi-ocupacao" style="color:#6a1b9a">0%</div><div class="kpi-label">Ocupação Semana</div><div class="kpi-trend neutral" id="kpi-ocup-trend">—</div></div>' +
+    '</div>' +
+    // Linha 1: Receita Mensal + Consultas por Status
+    '<div class="charts-grid">' +
+      '<div class="chart-card"><div class="chart-card-title"><i class="ti ti-chart-line"></i>Receita Mensal</div><div class="chart-card-sub">Últimos 6 meses</div><div class="chart-canvas-wrap"><canvas id="chart-receita"></canvas></div></div>' +
+      '<div class="chart-card"><div class="chart-card-title"><i class="ti ti-chart-donut-3"></i>Consultas por Status</div><div class="chart-card-sub">Mês atual</div><div class="chart-canvas-wrap"><canvas id="chart-status"></canvas></div></div>' +
+    '</div>' +
+    // Linha 2: Atendimentos Semanais + Procedimentos
+    '<div class="charts-grid">' +
+      '<div class="chart-card"><div class="chart-card-title"><i class="ti ti-chart-bar"></i>Atendimentos da Semana</div><div class="chart-card-sub">Consultas por dia</div><div class="chart-canvas-wrap"><canvas id="chart-semana"></canvas></div></div>' +
+      '<div class="chart-card"><div class="chart-card-title"><i class="ti ti-chart-pie"></i>Receita por Categoria</div><div class="chart-card-sub">Distribuição do mês</div><div class="chart-canvas-wrap"><canvas id="chart-categorias"></canvas></div></div>' +
+    '</div>' +
+    // Linha 3: Procedimentos mais realizados + Inadimplência
+    '<div class="charts-grid">' +
+      '<div class="chart-card"><div class="chart-card-title"><i class="ti ti-chart-arrows-vertical"></i>Procedimentos Mais Realizados</div><div class="chart-card-sub">Top 6 do mês</div><div class="chart-canvas-wrap"><canvas id="chart-procs"></canvas></div></div>' +
+      '<div class="chart-card"><div class="chart-card-title"><i class="ti ti-alert-triangle"></i>Inadimplência</div><div class="chart-card-sub">Contas vencidas</div><div id="chart-inadimplencia" style="max-height:280px;overflow-y:auto"></div></div>' +
+    '</div>';
+
+  dashSection.appendChild(chartsDiv);
+})();
+
+// — Instâncias dos gráficos (para destruir antes de recriar) —
+var _charts = {};
+
+function destroyChart(id) {
+  if (_charts[id]) {
+    _charts[id].destroy();
+    delete _charts[id];
+  }
+}
+
+function createChart(canvasId, config) {
+  destroyChart(canvasId);
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  var ctx = canvas.getContext('2d');
+  _charts[canvasId] = new Chart(ctx, config);
+  return _charts[canvasId];
+}
+
+// — Helpers de data para gráficos —
+function getLastMonths(n) {
+  var months = [];
+  var d = new Date();
+  for (var i = n - 1; i >= 0; i--) {
+    var m = new Date(d.getFullYear(), d.getMonth() - i, 1);
+    months.push({
+      key: m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0'),
+      label: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][m.getMonth()] + '/' + String(m.getFullYear()).slice(2)
+    });
+  }
+  return months;
+}
+
+function getWeekDates() {
+  var now = new Date();
+  var dow = now.getDay();
+  var dates = [];
+  var DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(now);
+    d.setDate(now.getDate() - dow + i);
+    dates.push({
+      key: d.toISOString().split('T')[0],
+      label: DAYS[i],
+      isToday: d.toISOString().split('T')[0] === today()
+    });
+  }
+  return dates;
+}
+
+// — Renderizar todos os gráficos do dashboard —
+function renderDashboardCharts() {
+  var appts = DB.get('agendamentos');
+  var fin = DB.get('financeiro');
+  var pacs = DB.get('pacientes');
+  var contas = DB.get('contas');
+  var td = today();
+  var mesAtual = new Date().toISOString().slice(0, 7);
+
+  // ── KPIs ──────────────────────────────────────────
+  var apptsMes = appts.filter(function(a) { return (a.data || '').slice(0, 7) === mesAtual; });
+  var presentes = apptsMes.filter(function(a) { return a.status === 'Presente' || a.status === 'Chegou'; });
+  var faltaram = apptsMes.filter(function(a) { return a.status === 'Faltou'; });
+  var taxaComp = apptsMes.length > 0 ? Math.round(presentes.length / apptsMes.length * 100) : 0;
+
+  var receitaMes = fin.filter(function(f) { return f.tipo === 'entrada' && f.status === 'pago' && (f.data || '').slice(0, 7) === mesAtual; });
+  var totalRec = receitaMes.reduce(function(s, f) { return s + Number(f.val); }, 0);
+  var ticketMedio = presentes.length > 0 ? totalRec / presentes.length : 0;
+
+  var novosPacMes = pacs.filter(function(p) { return p.createdAt && p.createdAt.slice(0, 7) === mesAtual; }).length;
+
+  // Ocupação da semana: consultas agendadas vs slots disponíveis (estimativa: 8h × 5 dias × 30min = 80 slots)
+  var weekDates = getWeekDates();
+  var weekAppts = appts.filter(function(a) {
+    return weekDates.some(function(d) { return d.key === a.data; }) && a.status !== 'Faltou';
+  }).length;
+  var meds = DB.get('profissionais');
+  var slotsEstimados = Math.max(meds.length, 1) * 80;
+  var ocupacao = Math.min(100, Math.round(weekAppts / slotsEstimados * 100));
+
+  // Tendências (comparar com mês anterior)
+  var mesAnterior = new Date();
+  mesAnterior.setMonth(mesAnterior.getMonth() - 1);
+  var mesAntKey = mesAnterior.getFullYear() + '-' + String(mesAnterior.getMonth() + 1).padStart(2, '0');
+  var apptsAnt = appts.filter(function(a) { return (a.data || '').slice(0, 7) === mesAntKey; });
+  var presAnt = apptsAnt.filter(function(a) { return a.status === 'Presente' || a.status === 'Chegou'; });
+  var taxaAnt = apptsAnt.length > 0 ? Math.round(presAnt.length / apptsAnt.length * 100) : 0;
+  var recAnt = fin.filter(function(f) { return f.tipo === 'entrada' && f.status === 'pago' && (f.data || '').slice(0, 7) === mesAntKey; }).reduce(function(s, f) { return s + Number(f.val); }, 0);
+  var ticketAnt = presAnt.length > 0 ? recAnt / presAnt.length : 0;
+  var novosAnt = pacs.filter(function(p) { return p.createdAt && p.createdAt.slice(0, 7) === mesAntKey; }).length;
+
+  function trendHtml(atual, anterior, suffix) {
+    suffix = suffix || '';
+    if (anterior === 0 && atual === 0) return '<span class="kpi-trend neutral">—</span>';
+    if (anterior === 0) return '<span class="kpi-trend up">▲ Novo</span>';
+    var diff = atual - anterior;
+    var pct = Math.round(Math.abs(diff) / anterior * 100);
+    if (diff > 0) return '<span class="kpi-trend up">▲ ' + pct + '% vs mês ant.</span>';
+    if (diff < 0) return '<span class="kpi-trend down">▼ ' + pct + '% vs mês ant.</span>';
+    return '<span class="kpi-trend neutral">= igual</span>';
+  }
+
+  document.getElementById('kpi-taxa').textContent = taxaComp + '%';
+  document.getElementById('kpi-taxa-trend').innerHTML = trendHtml(taxaComp, taxaAnt);
+  document.getElementById('kpi-ticket').textContent = fmtMoney(ticketMedio);
+  document.getElementById('kpi-ticket-trend').innerHTML = trendHtml(ticketMedio, ticketAnt);
+  document.getElementById('kpi-novos').textContent = novosPacMes;
+  document.getElementById('kpi-novos-trend').innerHTML = trendHtml(novosPacMes, novosAnt);
+  document.getElementById('kpi-ocupacao').textContent = ocupacao + '%';
+  document.getElementById('kpi-ocup-trend').innerHTML = '<span class="kpi-trend neutral">' + weekAppts + ' consultas esta semana</span>';
+
+  // ── Gráfico 1: Receita Mensal (Line) ──────────────
+  var months = getLastMonths(6);
+  var receitaData = months.map(function(m) {
+    return fin.filter(function(f) {
+      return f.tipo === 'entrada' && f.status === 'pago' && (f.data || '').slice(0, 7) === m.key;
+    }).reduce(function(s, f) { return s + Number(f.val); }, 0);
+  });
+  var despesaData = months.map(function(m) {
+    return fin.filter(function(f) {
+      return f.tipo === 'saida' && f.status === 'pago' && (f.data || '').slice(0, 7) === m.key;
+    }).reduce(function(s, f) { return s + Number(f.val); }, 0);
+  });
+
+  createChart('chart-receita', {
+    type: 'line',
+    data: {
+      labels: months.map(function(m) { return m.label; }),
+      datasets: [
+        {
+          label: 'Receita',
+          data: receitaData,
+          borderColor: '#4caf50',
+          backgroundColor: 'rgba(76,175,80,0.1)',
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.35,
+          pointBackgroundColor: '#4caf50',
+          pointRadius: 4,
+          pointHoverRadius: 6
+        },
+        {
+          label: 'Despesas',
+          data: despesaData,
+          borderColor: '#ef5350',
+          backgroundColor: 'rgba(239,83,80,0.08)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.35,
+          pointBackgroundColor: '#ef5350',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          borderDash: [5, 3]
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return ctx.dataset.label + ': R$ ' + Number(ctx.raw).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            font: { size: 10 },
+            callback: function(v) { return 'R$ ' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v); }
+          },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+
+  // ── Gráfico 2: Consultas por Status (Doughnut) ────
+  var statusCounts = {};
+  var statusColors = {
+    Confirmado: '#2196f3', Presente: '#4caf50', Chegou: '#4caf50',
+    Aguardando: '#ff9800', Faltou: '#f44336', Agendado: '#78909c'
+  };
+  apptsMes.forEach(function(a) {
+    var st = a.status || 'Agendado';
+    statusCounts[st] = (statusCounts[st] || 0) + 1;
+  });
+  var statusLabels = Object.keys(statusCounts);
+  var statusData = statusLabels.map(function(k) { return statusCounts[k]; });
+  var statusBg = statusLabels.map(function(k) { return statusColors[k] || '#90a4ae'; });
+
+  createChart('chart-status', {
+    type: 'doughnut',
+    data: {
+      labels: statusLabels,
+      datasets: [{
+        data: statusData,
+        backgroundColor: statusBg,
+        borderWidth: 2,
+        borderColor: '#fff',
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 }, padding: 8 } },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              var total = ctx.dataset.data.reduce(function(s, v) { return s + v; }, 0);
+              var pct = total > 0 ? Math.round(ctx.raw / total * 100) : 0;
+              return ctx.label + ': ' + ctx.raw + ' (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // ── Gráfico 3: Atendimentos da Semana (Bar) ───────
+  var wDates = getWeekDates();
+  var weekPresData = wDates.map(function(d) {
+    return appts.filter(function(a) { return a.data === d.key && (a.status === 'Presente' || a.status === 'Chegou'); }).length;
+  });
+  var weekAgData = wDates.map(function(d) {
+    return appts.filter(function(a) { return a.data === d.key && a.status !== 'Presente' && a.status !== 'Chegou' && a.status !== 'Faltou'; }).length;
+  });
+  var weekFaltaData = wDates.map(function(d) {
+    return appts.filter(function(a) { return a.data === d.key && a.status === 'Faltou'; }).length;
+  });
+
+  createChart('chart-semana', {
+    type: 'bar',
+    data: {
+      labels: wDates.map(function(d) { return d.label + (d.isToday ? ' ★' : ''); }),
+      datasets: [
+        { label: 'Realizados', data: weekPresData, backgroundColor: '#4caf50', borderRadius: 4, barPercentage: 0.7 },
+        { label: 'Agendados', data: weekAgData, backgroundColor: '#2196f3', borderRadius: 4, barPercentage: 0.7 },
+        { label: 'Faltas', data: weekFaltaData, backgroundColor: '#f44336', borderRadius: 4, barPercentage: 0.7 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } } },
+      scales: {
+        y: { beginAtZero: true, stacked: true, ticks: { font: { size: 10 }, stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        x: { stacked: true, ticks: { font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+
+  // ── Gráfico 4: Receita por Categoria (Pie) ────────
+  var catData = {};
+  var catColors = ['#4caf50', '#2196f3', '#9c27b0', '#ff9800', '#f44336', '#00bcd4', '#795548'];
+  fin.filter(function(f) { return f.tipo === 'entrada' && f.status === 'pago' && (f.data || '').slice(0, 7) === mesAtual; })
+    .forEach(function(f) { catData[f.cat] = (catData[f.cat] || 0) + Number(f.val); });
+  var catLabels = Object.keys(catData).sort(function(a, b) { return catData[b] - catData[a]; });
+  var catValues = catLabels.map(function(k) { return catData[k]; });
+
+  createChart('chart-categorias', {
+    type: 'pie',
+    data: {
+      labels: catLabels.length ? catLabels : ['Sem dados'],
+      datasets: [{
+        data: catValues.length ? catValues : [1],
+        backgroundColor: catLabels.length ? catColors.slice(0, catLabels.length) : ['#e0e0e0'],
+        borderWidth: 2,
+        borderColor: '#fff',
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 }, padding: 8 } },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return ctx.label + ': R$ ' + Number(ctx.raw).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+          }
+        }
+      }
+    }
+  });
+
+  // ── Gráfico 5: Procedimentos Mais Realizados (Horizontal Bar) ──
+  var procData = {};
+  apptsMes.filter(function(a) { return a.status === 'Presente' || a.status === 'Chegou'; })
+    .forEach(function(a) { procData[a.proc] = (procData[a.proc] || 0) + 1; });
+  var procSorted = Object.entries(procData).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 6);
+  var procLabels = procSorted.map(function(e) { return e[0]; });
+  var procValues = procSorted.map(function(e) { return e[1]; });
+  var procColors = ['#1565C0', '#0288d1', '#00897B', '#6a1b9a', '#e65100', '#c62828'];
+
+  createChart('chart-procs', {
+    type: 'bar',
+    data: {
+      labels: procLabels.length ? procLabels : ['Sem dados'],
+      datasets: [{
+        label: 'Qtd',
+        data: procValues.length ? procValues : [0],
+        backgroundColor: procLabels.length ? procColors.slice(0, procLabels.length) : ['#e0e0e0'],
+        borderRadius: 6,
+        barPercentage: 0.65
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { font: { size: 10 }, stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        y: { ticks: { font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+
+  // ── Inadimplência (HTML list) ──────────────────────
+  var inadEl = document.getElementById('chart-inadimplencia');
+  if (inadEl) {
+    var vencidas = contas.filter(function(c) {
+      return c.tipo === 'receber' && c.status !== 'pago' && c.vencimento && c.vencimento < td;
+    }).sort(function(a, b) { return (a.vencimento || '').localeCompare(b.vencimento || ''); });
+
+    if (!vencidas.length) {
+      inadEl.innerHTML = '<div class="empty-state" style="padding:20px"><i class="ti ti-mood-happy" style="color:#4caf50"></i>Nenhuma inadimplência!</div>';
+    } else {
+      var maxInad = vencidas.reduce(function(mx, c) { return Math.max(mx, Number(c.val)); }, 1);
+      inadEl.innerHTML = vencidas.slice(0, 8).map(function(c) {
+        var diasAtraso = Math.floor((new Date(td) - new Date(c.vencimento)) / 86400000);
+        var pct = Math.round(Number(c.val) / maxInad * 100);
+        return '<div class="inadimplencia-item">' +
+          '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + H(c.desc) + '</div>' +
+          '<div style="font-size:10px;color:#78909c;margin-top:2px">' + H(c.pacNome || '—') + ' · Venc: ' + H(fmtDate(c.vencimento)) + '</div>' +
+          '<div class="inad-bar" style="margin-top:4px"><div class="inad-bar-fill" style="width:' + pct + '%"></div></div></div>' +
+          '<div class="inad-val">' + H(fmtMoney(c.val)) + '</div>' +
+          '<span class="inad-days">' + diasAtraso + ' dias</span></div>';
+      }).join('') +
+        (vencidas.length > 8 ? '<div style="text-align:center;padding:8px;font-size:11px;color:#78909c">+ ' + (vencidas.length - 8) + ' conta(s) vencida(s)</div>' : '') +
+        '<div style="padding:10px 12px;border-top:1px solid #f0f0f0;font-size:12px;font-weight:700;color:#c62828;display:flex;justify-content:space-between"><span>Total inadimplente:</span><span>' + H(fmtMoney(vencidas.reduce(function(s, c) { return s + Number(c.val); }, 0))) + '</span></div>';
+    }
+  }
+}
+
+// — Integrar gráficos no renderDashboard —
+var _chartRenderDash = renderDashboard;
+renderDashboard = function() {
+  _chartRenderDash();
+  renderDashboardCharts();
+};
+
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  2. BUSCA AVANÇADA POR PERÍODO NA AGENDA            ║
+// ╚══════════════════════════════════════════════════════╝
+
+// — Injetar HTML da busca por período —
+(function() {
+  var agendaSection = document.getElementById('section-agenda');
+  if (!agendaSection) return;
+
+  // Criar painel de busca por período no topo da agenda
+  var searchPanel = document.createElement('div');
+  searchPanel.id = 'agenda-range-panel';
+  searchPanel.className = 'card';
+  searchPanel.style.marginBottom = '14px';
+  searchPanel.innerHTML =
+    '<div class="card-title" style="cursor:pointer;user-select:none" onclick="toggleAgendaRange()">' +
+      '<i class="ti ti-calendar-search"></i>Busca por Período' +
+      '<i class="ti ti-chevron-down" id="range-arrow" style="margin-left:auto;font-size:14px;transition:transform .25s"></i>' +
+    '</div>' +
+    '<div id="agenda-range-body" style="display:none">' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">' +
+        '<div class="form-group" style="flex:1;min-width:130px"><label>Data Início</label><input type="date" id="range-inicio"></div>' +
+        '<div class="form-group" style="flex:1;min-width:130px"><label>Data Fim</label><input type="date" id="range-fim"></div>' +
+        '<div class="form-group" style="flex:1;min-width:130px"><label>Profissional</label><select id="range-prof" style="width:100%"><option value="">Todos</option></select></div>' +
+        '<div class="form-group" style="flex:1;min-width:130px"><label>Status</label><select id="range-status" style="width:100%"><option value="">Todos</option><option>Confirmado</option><option>Agendado</option><option>Presente</option><option>Faltou</option><option>Aguardando</option></select></div>' +
+        '<div class="form-group" style="flex:1;min-width:130px"><label>Procedimento</label><select id="range-proc" style="width:100%"><option value="">Todos</option><option>Avaliação</option><option>Limpeza</option><option>Extração</option><option>Tratamento de Canal</option><option>Clareamento</option><option>Aparelho Ortodôntico</option><option>Implante</option><option>Outro</option></select></div>' +
+        '<button class="btn btn-primary" onclick="searchAgendaRange()"><i class="ti ti-search"></i> Buscar</button>' +
+        '<button class="btn btn-outline" onclick="clearAgendaRange()"><i class="ti ti-x"></i></button>' +
+      '</div>' +
+      // Atalhos rápidos
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">' +
+        '<button class="btn btn-sm" style="background:#e3f2fd;color:#1565C0;border:1px solid #90caf9" onclick="setRangePreset(\'hoje\')">Hoje</button>' +
+        '<button class="btn btn-sm" style="background:#e3f2fd;color:#1565C0;border:1px solid #90caf9" onclick="setRangePreset(\'semana\')">Esta Semana</button>' +
+        '<button class="btn btn-sm" style="background:#e3f2fd;color:#1565C0;border:1px solid #90caf9" onclick="setRangePreset(\'mes\')">Este Mês</button>' +
+        '<button class="btn btn-sm" style="background:#e3f2fd;color:#1565C0;border:1px solid #90caf9" onclick="setRangePreset(\'mesant\')">Mês Anterior</button>' +
+        '<button class="btn btn-sm" style="background:#e3f2fd;color:#1565C0;border:1px solid #90caf9" onclick="setRangePreset(\'trimestre\')">Trimestre</button>' +
+        '<button class="btn btn-sm" style="background:#e3f2fd;color:#1565C0;border:1px solid #90caf9" onclick="setRangePreset(\'ano\')">Este Ano</button>' +
+      '</div>' +
+      // Resumo estatístico
+      '<div id="range-stats" style="display:none">' +
+        '<div class="summary-grid" id="range-summary" style="margin-bottom:14px"></div>' +
+        '<div class="card" style="margin:0;border:1px solid #e3f2fd"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span><i class="ti ti-list-details"></i>Resultados</span><span id="range-count" style="font-size:12px;color:#78909c;font-weight:400"></span></div>' +
+          '<div class="table-wrap" id="range-results"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  agendaSection.insertBefore(searchPanel, agendaSection.firstChild);
+})();
+
+// — Toggle painel de busca —
+function toggleAgendaRange() {
+  var body = document.getElementById('agenda-range-body');
+  var arrow = document.getElementById('range-arrow');
+  if (!body) return;
+  var isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+  if (!isOpen) populateRangeSelects();
+}
+
+// — Popular selects do filtro —
+function populateRangeSelects() {
+  var profEl = document.getElementById('range-prof');
+  if (!profEl) return;
+  var meds = DB.get('profissionais');
+  var cur = profEl.value;
+  profEl.innerHTML = '<option value="">Todos</option>' + meds.map(function(m) {
+    return '<option value="' + safeId(m.id) + '">' + H(m.nome) + '</option>';
+  }).join('');
+  profEl.value = cur;
+}
+
+// — Presets de período —
+function setRangePreset(preset) {
+  var ini = document.getElementById('range-inicio');
+  var fim = document.getElementById('range-fim');
+  if (!ini || !fim) return;
+
+  var now = new Date();
+  var y = now.getFullYear();
+  var m = now.getMonth();
+
+  switch (preset) {
+    case 'hoje':
+      ini.value = today();
+      fim.value = today();
+      break;
+    case 'semana':
+      var dow = now.getDay();
+      var seg = new Date(now); seg.setDate(now.getDate() - dow + 1);
+      var dom = new Date(seg); dom.setDate(seg.getDate() + 6);
+      ini.value = seg.toISOString().split('T')[0];
+      fim.value = dom.toISOString().split('T')[0];
+      break;
+    case 'mes':
+      ini.value = y + '-' + String(m + 1).padStart(2, '0') + '-01';
+      fim.value = new Date(y, m + 1, 0).toISOString().split('T')[0];
+      break;
+    case 'mesant':
+      ini.value = new Date(y, m - 1, 1).toISOString().split('T')[0];
+      fim.value = new Date(y, m, 0).toISOString().split('T')[0];
+      break;
+    case 'trimestre':
+      var qStart = Math.floor(m / 3) * 3;
+      ini.value = new Date(y, qStart, 1).toISOString().split('T')[0];
+      fim.value = new Date(y, qStart + 3, 0).toISOString().split('T')[0];
+      break;
+    case 'ano':
+      ini.value = y + '-01-01';
+      fim.value = y + '-12-31';
+      break;
+  }
+  searchAgendaRange();
+}
+
+// — Executar busca por período —
+function searchAgendaRange() {
+  var inicio = (document.getElementById('range-inicio') || {}).value;
+  var fim = (document.getElementById('range-fim') || {}).value;
+  if (!inicio || !fim) { showNotif('Selecione o período.', 'error'); return; }
+  if (inicio > fim) { showNotif('Data início deve ser anterior à data fim.', 'error'); return; }
+
+  var profId = (document.getElementById('range-prof') || {}).value;
+  var status = (document.getElementById('range-status') || {}).value;
+  var proc = (document.getElementById('range-proc') || {}).value;
+  var pacs = DB.get('pacientes');
+  var meds = DB.get('profissionais');
+
+  var list = DB.get('agendamentos').filter(function(a) {
+    return a.data >= inicio && a.data <= fim &&
+           (!profId || a.profId === profId) &&
+           (!status || a.status === status) &&
+           (!proc || a.proc === proc);
+  }).sort(function(a, b) {
+    return a.data === b.data ? a.hora.localeCompare(b.hora) : a.data.localeCompare(b.data);
+  });
+
+  // Estatísticas
+  var total = list.length;
+  var presentes = list.filter(function(a) { return a.status === 'Presente' || a.status === 'Chegou'; });
+  var faltaram = list.filter(function(a) { return a.status === 'Faltou'; });
+  var confirmados = list.filter(function(a) { return a.status === 'Confirmado'; });
+  var receita = presentes.reduce(function(s, a) { return s + Number(a.valor || 0); }, 0);
+  var taxaComp = total > 0 ? Math.round(presentes.length / total * 100) : 0;
+  var taxaFalta = total > 0 ? Math.round(faltaram.length / total * 100) : 0;
+
+  // Dias no período
+  var d1 = new Date(inicio + 'T00:00:00');
+  var d2 = new Date(fim + 'T00:00:00');
+  var dias = Math.ceil((d2 - d1) / 86400000) + 1;
+
+  document.getElementById('range-stats').style.display = 'block';
+  document.getElementById('range-count').textContent = total + ' consulta(s) em ' + dias + ' dia(s) (' + H(fmtDate(inicio)) + ' a ' + H(fmtDate(fim)) + ')';
+
+  document.getElementById('range-summary').innerHTML =
+    '<div class="metric"><div class="metric-label">Total</div><div class="metric-val">' + total + '</div><div class="metric-sub">' + (total / Math.max(dias, 1)).toFixed(1) + '/dia</div></div>' +
+    '<div class="metric green"><div class="metric-label">Realizados</div><div class="metric-val">' + presentes.length + '</div><div class="metric-sub">' + taxaComp + '% taxa</div></div>' +
+    '<div class="metric red"><div class="metric-label">Faltas</div><div class="metric-val">' + faltaram.length + '</div><div class="metric-sub">' + taxaFalta + '% taxa</div></div>' +
+    '<div class="metric" style="border-left:3px solid #2e7d32"><div class="metric-label">Receita Período</div><div class="metric-val" style="color:#2e7d32;font-size:18px">' + H(fmtMoney(receita)) + '</div><div class="metric-sub">Ticket: ' + H(fmtMoney(presentes.length > 0 ? receita / presentes.length : 0)) + '</div></div>';
+
+  // Tabela de resultados
+  var resEl = document.getElementById('range-results');
+  if (!list.length) {
+    resEl.innerHTML = '<div class="empty-state"><i class="ti ti-calendar-off"></i>Nenhuma consulta encontrada no período.</div>';
+    return;
+  }
+
+  resEl.innerHTML = '<table><thead><tr><th>Data</th><th>Hora</th><th>Paciente</th><th>Profissional</th><th>Procedimento</th><th>Valor</th><th>Status</th></tr></thead><tbody>' +
+    list.map(function(a) {
+      var pac = null; for (var i = 0; i < pacs.length; i++) { if (pacs[i].id === a.pacienteId) { pac = pacs[i]; break; } }
+      var med = null; for (var j = 0; j < meds.length; j++) { if (meds[j].id === a.profId) { med = meds[j]; break; } }
+      return '<tr><td>' + H(fmtDate(a.data)) + '</td><td><b>' + H(a.hora) + '</b></td>' +
+        '<td>' + H(pac ? pac.nome : a.pacienteNome || '—') + '</td>' +
+        '<td>' + H(med ? med.nome : a.profNome || '—') + '</td>' +
+        '<td>' + H(a.proc) + '</td>' +
+        '<td>' + (a.valor ? H(fmtMoney(a.valor)) : '—') + '</td>' +
+        '<td><span class="badge ' + (SB[a.status] || 'badge-gray') + '">' + H(a.status) + '</span></td></tr>';
+    }).join('') + '</tbody></table>' +
+    // Resumo por profissional
+    '<div style="margin-top:14px;padding:14px;background:#f5f9ff;border-radius:8px;border:1px solid #e3f2fd">' +
+      '<div style="font-size:12px;font-weight:700;color:#1a237e;margin-bottom:10px"><i class="ti ti-chart-bar" style="margin-right:4px"></i>Resumo por Profissional</div>' +
+      buildProfSummary(list, meds) +
+    '</div>';
+}
+
+// — Resumo por profissional na busca —
+function buildProfSummary(appts, meds) {
+  var byProf = {};
+  appts.forEach(function(a) {
+    var key = a.profId || '__sem__';
+    if (!byProf[key]) byProf[key] = { nome: '', total: 0, presentes: 0, faltou: 0, receita: 0 };
+    byProf[key].total++;
+    if (a.status === 'Presente' || a.status === 'Chegou') { byProf[key].presentes++; byProf[key].receita += Number(a.valor || 0); }
+    if (a.status === 'Faltou') byProf[key].faltou++;
+  });
+  Object.keys(byProf).forEach(function(k) {
+    var med = null; for (var i = 0; i < meds.length; i++) { if (meds[i].id === k) { med = meds[i]; break; } }
+    byProf[k].nome = med ? med.nome : 'Sem profissional';
+  });
+  var sorted = Object.values(byProf).sort(function(a, b) { return b.total - a.total; });
+  var maxTotal = sorted.length > 0 ? sorted[0].total : 1;
+
+  return sorted.map(function(p) {
+    var taxa = p.total > 0 ? Math.round(p.presentes / p.total * 100) : 0;
+    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #e8eef3;font-size:12px">' +
+      '<div style="min-width:120px;font-weight:600">' + H(p.nome) + '</div>' +
+      '<div style="flex:1"><div style="height:8px;border-radius:4px;background:#eceff1;overflow:hidden"><div style="height:100%;border-radius:4px;background:linear-gradient(90deg,#1565C0,#0288d1);width:' + Math.round(p.total / maxTotal * 100) + '%"></div></div></div>' +
+      '<div style="min-width:60px;text-align:center"><b>' + p.total + '</b> total</div>' +
+      '<div style="min-width:60px;text-align:center;color:#2e7d32"><b>' + p.presentes + '</b> pres.</div>' +
+      '<div style="min-width:50px;text-align:center;color:#c62828">' + p.faltou + ' falta</div>' +
+      '<div style="min-width:50px;text-align:center;color:#1565C0">' + taxa + '%</div>' +
+      '<div style="min-width:80px;text-align:right;font-weight:600">' + H(fmtMoney(p.receita)) + '</div></div>';
+  }).join('');
+}
+
+// — Limpar busca —
+function clearAgendaRange() {
+  ['range-inicio', 'range-fim'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['range-prof', 'range-status', 'range-proc'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('range-stats').style.display = 'none';
+}
+
+// — Integrar populate no render da agenda —
+var _rangeRenderAgenda = renders.agenda;
+renders.agenda = function() {
+  _rangeRenderAgenda();
+  populateRangeSelects();
+};
+
+// — Atualizar renders map —
+renders.dashboard = renderDashboard;
+
+
+// ══════════════════════════════════════════════════════════════════
+console.log('%c[MELHORIA] Dashboard Gráficos + Busca Avançada Agenda carregados', 'color:#00897B;font-weight:bold;font-size:12px');
+
+// ══════════════════════════════════════════════════════════════════
+// ██  FIX: Exibir data nas Próximas Consultas do Dashboard       ██
+// ██  Colar APÓS o bloco de melhorias (gráficos/agenda),         ██
+// ██  ANTES do auth.onAuthStateChanged                           ██
+// ══════════════════════════════════════════════════════════════════
+
+var _dashDateRender = renderDashboard;
+renderDashboard = function() {
+  // Executar todo o render existente (métricas + gráficos)
+  _dashDateRender();
+
+  // Re-renderizar APENAS o bloco de Próximas Consultas com a data
+  var appts = DB.get('agendamentos');
+  var pacs = DB.get('pacientes');
+  var td = today();
+  var next = appts.filter(function(a) { return a.data >= td; })
+    .sort(function(a, b) {
+      return a.data === b.data ? a.hora.localeCompare(b.hora) : a.data.localeCompare(b.data);
+    }).slice(0, 5);
+
+  var da = document.getElementById('dash-appts');
+  if (!da) return;
+
+  da.innerHTML = next.length ? next.map(function(a) {
+    var pac = null;
+    for (var i = 0; i < pacs.length; i++) {
+      if (pacs[i].id === a.pacienteId) { pac = pacs[i]; break; }
+    }
+    var isHoje = a.data === td;
+    var dataLabel = isHoje ? 'Hoje' : fmtDate(a.data);
+
+    return '<div class="appt-item">' +
+      '<div class="appt-dot ' + (SD[a.status] || 'dot-blue') + '"></div>' +
+      '<div class="appt-time">' + H(a.hora) +
+        '<div style="font-size:9px;font-weight:400;color:' + (isHoje ? '#2e7d32' : '#90a4ae') + ';margin-top:1px">' + H(dataLabel) + '</div>' +
+      '</div>' +
+      '<div class="appt-info">' +
+        '<div class="appt-name">' + H(pac ? pac.nome : '—') + '</div>' +
+        '<div class="appt-proc">' + H(a.proc) + '</div>' +
+      '</div>' +
+      '<span class="badge ' + (SB[a.status] || 'badge-gray') + '">' + H(a.status) + '</span>' +
+    '</div>';
+  }).join('') : '<div class="empty-state"><i class="ti ti-calendar-off"></i>Sem consultas</div>';
+};
+
+renders.dashboard = renderDashboard;
+
+// ══════════════════════════════════════════════════════════════════
+// ██  MELHORIA 8:  Visualizar documentos (Receita/Atestado)      ██
+// ██  MELHORIA 12: Impressão formatada (PDF via janela)          ██
+// ██  MELHORIA 13: Tema Escuro completo                          ██
+// ██  Colar APÓS todos os patches anteriores,                    ██
+// ██  ANTES do auth.onAuthStateChanged                           ██
+// ══════════════════════════════════════════════════════════════════
+
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  8 + 12. VISUALIZAR E IMPRIMIR DOCUMENTOS           ║
+// ╚══════════════════════════════════════════════════════╝
+
+// — Injetar modal de visualização —
+(function() {
+  var modal = document.createElement('div');
+  modal.className = 'modal-bg';
+  modal.id = 'modal-viewDoc';
+  modal.innerHTML =
+    '<div class="modal wide">' +
+      '<div class="modal-head">' +
+        '<h3><i class="ti ti-file-text" style="margin-right:6px"></i><span id="viewdoc-title">Documento</span></h3>' +
+        '<button class="modal-close" onclick="closeModal(\'viewDoc\')"><i class="ti ti-x"></i></button>' +
+      '</div>' +
+      '<div id="viewdoc-content"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
+        '<button class="btn btn-outline" onclick="closeModal(\'viewDoc\')">Fechar</button>' +
+        '<button class="btn btn-success" onclick="printCurrentDoc()"><i class="ti ti-printer"></i> Imprimir / PDF</button>' +
+      '</div>' +
+    '</div>';
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('open'); });
+  document.body.appendChild(modal);
+})();
+
+// Armazena doc atual para impressão
+var _currentViewDoc = null;
+
+// — Montar conteúdo HTML do documento —
+function buildDocHtml(doc) {
+  var pacs = DB.get('pacientes');
+  var meds = DB.get('profissionais');
+  var pac = null; for (var i = 0; i < pacs.length; i++) { if (pacs[i].id === doc.pacienteId) { pac = pacs[i]; break; } }
+  var med = null;
+  meds.forEach(function(m) {
+    if (m.nome === doc.medicoNome || m.id === doc.medicoId) med = m;
+  });
+
+  var clinicNome = med ? (med.recNome || med.nome) : 'Consultório Odontológico';
+  var clinicInfo = med ? [med.cro ? 'CRO: ' + med.cro : '', med.recEnd || '', med.recTel || ''].filter(Boolean).join(' · ') : '';
+  var clinicRodape = med ? (med.recObs || '') : '';
+  var pacNome = pac ? pac.nome : (doc.pacienteNome || '—');
+  var pacInfo = pac ? [pac.cpf ? 'CPF: ' + pac.cpf : '', pac.nasc ? 'Nasc: ' + fmtDate(pac.nasc) : '', pac.tel || ''].filter(Boolean).join(' · ') : '';
+
+  if (doc.tipo === 'Receita') {
+    var medicamento = doc.conteudo || '—';
+    return {
+      title: 'Receita Médica',
+      html:
+        '<div class="receita-paper">' +
+          '<div class="receita-header"><h2>' + H(clinicNome) + '</h2><p>' + H(clinicInfo) + '</p></div>' +
+          '<div style="text-align:center;margin-bottom:14px"><span class="badge badge-blue" style="font-size:12px;padding:4px 14px">RECEITUÁRIO</span></div>' +
+          '<div style="margin-bottom:14px"><b>Paciente:</b> ' + H(pacNome) + '</div>' +
+          (pacInfo ? '<div style="margin-bottom:14px;font-size:12px;color:#546e7a">' + H(pacInfo) + '</div>' : '') +
+          '<div style="margin-bottom:8px"><b>Data:</b> ' + H(fmtDate(doc.data)) + '</div>' +
+          '<div style="border-top:1px dashed #cfd8dc;margin:14px 0"></div>' +
+          '<div style="margin-bottom:8px"><b>Rx:</b></div>' +
+          '<div style="white-space:pre-wrap;line-height:2;min-height:80px;padding:8px 0">' + H(medicamento).replace(/\n/g, '<br>') + '</div>' +
+          '<div class="receita-foot">' +
+            '<div style="margin-top:40px;border-top:1px solid #1a237e;display:inline-block;padding-top:6px;min-width:250px">' + H(clinicNome) + '</div>' +
+            (med && med.cro ? '<div style="font-size:11px;margin-top:4px">' + H(med.cro) + '</div>' : '') +
+            (clinicRodape ? '<div style="margin-top:8px;font-size:10px;color:#90a4ae">' + H(clinicRodape) + '</div>' : '') +
+          '</div>' +
+        '</div>'
+    };
+  }
+
+  if (doc.tipo === 'Atestado') {
+    var horas = doc.horas || '—';
+    return {
+      title: 'Atestado Odontológico',
+      html:
+        '<div class="receita-paper">' +
+          '<div class="receita-header"><h2>' + H(clinicNome) + '</h2><p>' + H(clinicInfo) + '</p></div>' +
+          '<div style="text-align:center;margin-bottom:14px"><span class="badge badge-green" style="font-size:12px;padding:4px 14px">ATESTADO</span></div>' +
+          '<div style="line-height:2.2;font-size:14px">' +
+            '<p>Atesto, para os devidos fins, que o(a) paciente <b>' + H(pacNome) + '</b>' +
+            (pacInfo ? ' (' + H(pacInfo) + ')' : '') +
+            ' esteve sob atendimento odontológico nesta data, ' +
+            'necessitando de afastamento de suas atividades por <b>' + H(horas) + ' hora(s)</b>.</p>' +
+            (doc.cid ? '<p style="margin-top:10px">CID: <b>' + H(doc.cid) + '</b></p>' : '') +
+            (doc.obs ? '<p style="margin-top:10px;font-size:13px;color:#546e7a"><b>Obs:</b> ' + H(doc.obs) + '</p>' : '') +
+          '</div>' +
+          '<div style="margin-top:10px"><b>Data:</b> ' + H(fmtDate(doc.data)) + '</div>' +
+          '<div class="receita-foot">' +
+            '<div style="margin-top:40px;border-top:1px solid #1a237e;display:inline-block;padding-top:6px;min-width:250px">' + H(clinicNome) + '</div>' +
+            (med && med.cro ? '<div style="font-size:11px;margin-top:4px">' + H(med.cro) + '</div>' : '') +
+          '</div>' +
+        '</div>'
+    };
+  }
+
+  // Tipo genérico
+  return {
+    title: doc.tipo || 'Documento',
+    html: '<div class="receita-paper"><p><b>Tipo:</b> ' + H(doc.tipo) + '</p><p><b>Paciente:</b> ' + H(pacNome) + '</p><p><b>Data:</b> ' + H(fmtDate(doc.data)) + '</p></div>'
+  };
+}
+
+// — Visualizar documento no modal —
+function viewDocumento(id) {
+  var docs = DB.get('documentos');
+  var doc = null;
+  for (var i = 0; i < docs.length; i++) { if (docs[i].id === id) { doc = docs[i]; break; } }
+  if (!doc) { showNotif('Documento não encontrado', 'error'); return; }
+
+  _currentViewDoc = doc;
+  var built = buildDocHtml(doc);
+  document.getElementById('viewdoc-title').textContent = built.title;
+  document.getElementById('viewdoc-content').innerHTML = built.html;
+  document.getElementById('modal-viewDoc').classList.add('open');
+}
+
+// — Imprimir documento atual —
+function printCurrentDoc() {
+  if (!_currentViewDoc) return;
+  var built = buildDocHtml(_currentViewDoc);
+  printDocumentHtml(built.title, built.html);
+}
+
+// — Imprimir qualquer HTML formatado em nova janela —
+function printDocumentHtml(title, bodyHtml) {
+  var w = window.open('', '_blank', 'width=800,height=600');
+  if (!w) { showNotif('Permita pop-ups para imprimir', 'error'); return; }
+
+  w.document.write(
+    '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+    '<title>' + H(title) + ' — OdontoSystem</title>' +
+    '<style>' +
+      '*{box-sizing:border-box;margin:0;padding:0}' +
+      'body{font-family:"Segoe UI",sans-serif;padding:30px 40px;color:#1a1a2e;background:#fff}' +
+      '.receita-paper{border:1px solid #ccc;border-radius:8px;padding:30px;font-size:14px;line-height:1.8;max-width:700px;margin:0 auto}' +
+      '.receita-header{text-align:center;border-bottom:2px solid #1a237e;padding-bottom:12px;margin-bottom:16px}' +
+      '.receita-header h2{color:#1a237e;font-size:18px;margin-bottom:4px}' +
+      '.receita-header p{color:#546e7a;font-size:12px}' +
+      '.receita-foot{margin-top:30px;border-top:1px solid #e0e0e0;padding-top:12px;font-size:12px;color:#78909c;text-align:center}' +
+      '.badge{display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px}' +
+      '.badge-blue{background:#e3f2fd;color:#1565C0}.badge-green{background:#e8f5e9;color:#2e7d32}' +
+      '@media print{body{padding:10px}' +
+        '.receita-paper{border:none;padding:20px}' +
+        '.no-print{display:none !important}}' +
+    '</style></head><body>' +
+    '<div class="no-print" style="text-align:center;margin-bottom:20px;padding:12px;background:#f5f9ff;border-radius:8px">' +
+      '<button onclick="window.print()" style="padding:10px 24px;background:#1565C0;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit;margin-right:8px">🖨 Imprimir / Salvar PDF</button>' +
+      '<button onclick="window.close()" style="padding:10px 24px;background:#fff;color:#546e7a;border:1px solid #ccc;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit">Fechar</button>' +
+    '</div>' +
+    bodyHtml +
+    '</body></html>'
+  );
+  w.document.close();
+  // Auto-abrir diálogo de impressão após carregar
+  w.onload = function() { w.focus(); w.print(); };
+}
+
+// — Override renderDocumentos para adicionar botão Visualizar —
+var _docViewRender = renderDocumentos;
+renderDocumentos = function() {
+  var list = DB.get('documentos').sort(function(a, b) { return (b.data || '').localeCompare(a.data || ''); });
+  var el = document.getElementById('docs-list'); if (!el) return;
+  if (!list.length) { el.innerHTML = '<div class="empty-state"><i class="ti ti-file-off"></i>Nenhum documento</div>'; return; }
+  el.innerHTML = '<table><thead><tr><th>Tipo</th><th>Paciente</th><th>Prof.</th><th>Data</th><th></th></tr></thead><tbody>' +
+    list.map(function(d) {
+      var sid = safeId(d.id);
+      return '<tr><td><span class="badge ' + (d.tipo === 'Receita' ? 'badge-blue' : 'badge-green') + '">' + H(d.tipo) + '</span></td>' +
+        '<td>' + H(d.pacienteNome) + '</td><td>' + H(d.medicoNome || '—') + '</td><td>' + H(fmtDate(d.data)) + '</td>' +
+        '<td style="display:flex;gap:4px">' +
+          '<button class="btn btn-primary btn-sm" onclick="viewDocumento(\'' + sid + '\')" title="Visualizar"><i class="ti ti-eye"></i></button>' +
+          '<button class="btn btn-success btn-sm" onclick="printDocById(\'' + sid + '\')" title="Imprimir"><i class="ti ti-printer"></i></button>' +
+          '<button class="btn btn-danger btn-sm" onclick="deleteDocumento(\'' + sid + '\')"><i class="ti ti-trash"></i></button>' +
+        '</td></tr>';
+    }).join('') + '</tbody></table>';
+};
+
+// — Imprimir direto sem abrir modal —
+function printDocById(id) {
+  var docs = DB.get('documentos');
+  var doc = null; for (var i = 0; i < docs.length; i++) { if (docs[i].id === id) { doc = docs[i]; break; } }
+  if (!doc) return;
+  var built = buildDocHtml(doc);
+  printDocumentHtml(built.title, built.html);
+}
+
+// — Imprimir receita direto do modal de emissão —
+var _docSaveReceita = saveReceita;
+saveReceita = function() {
+  _docSaveReceita();
+  // Após salvar, perguntar se quer imprimir
+  setTimeout(function() {
+    var docs = DB.get('documentos').sort(function(a, b) { return (b.data || '').localeCompare(a.data || ''); });
+    if (docs.length > 0 && docs[0].tipo === 'Receita') {
+      if (confirm('Receita salva! Deseja imprimir agora?')) {
+        var built = buildDocHtml(docs[0]);
+        printDocumentHtml(built.title, built.html);
+      }
+    }
+  }, 500);
+};
+
+// — Imprimir atestado direto do modal de emissão —
+var _docSaveAtestado = saveAtestado;
+saveAtestado = function() {
+  // Capturar dados antes de salvar (pois o modal fecha)
+  var pacId = document.getElementById('ates-pac').value;
+  var medId = document.getElementById('ates-medico').value;
+  var cid = document.getElementById('ates-cid').value;
+  var obs = (document.getElementById('ates-obs') || {}).value || '';
+
+  _docSaveAtestado();
+
+  setTimeout(function() {
+    var docs = DB.get('documentos').sort(function(a, b) { return (b.data || '').localeCompare(a.data || ''); });
+    if (docs.length > 0 && docs[0].tipo === 'Atestado') {
+      // Adicionar CID e obs ao documento para visualização
+      docs[0].cid = cid;
+      docs[0].obs = obs;
+      if (confirm('Atestado emitido! Deseja imprimir agora?')) {
+        var built = buildDocHtml(docs[0]);
+        printDocumentHtml(built.title, built.html);
+      }
+    }
+  }, 500);
+};
+
+renders.documentos = renderDocumentos;
+
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  13. TEMA ESCURO COMPLETO                                   ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+// — Injetar CSS do tema escuro —
+(function() {
+  var darkCSS = document.createElement('style');
+  darkCSS.id = 'dark-theme-css';
+  darkCSS.textContent = [
+    // ── Base ──
+    'body.dark{background:#0f0f1a;color:#d8dce6}',
+    'body.dark .main{background:#0f0f1a}',
+
+    // ── Sidebar ──
+    'body.dark .sidebar{background:#0d0d1f}',
+    'body.dark .logo{border-bottom-color:rgba(255,255,255,.08)}',
+    'body.dark nav a{color:rgba(255,255,255,.55)}',
+    'body.dark nav a:hover{color:#fff;background:rgba(255,255,255,.06)}',
+    'body.dark nav a.active{color:#fff;background:rgba(255,255,255,.1);border-left-color:#64b5f6}',
+    'body.dark .nav-section{color:rgba(255,255,255,.7)}',
+    'body.dark .sidebar-user{border-top-color:rgba(255,255,255,.08)}',
+
+    // ── Topbar ──
+    'body.dark .topbar{background:#161628;border-bottom-color:#252540}',
+    'body.dark .topbar-title{color:#e0e6f0}',
+    'body.dark .gsearch-input{background:#1e1e35;border-color:#2d2d50;color:#d8dce6}',
+    'body.dark .gsearch-input:focus{background:#1e1e35;border-color:#5c6bc0;box-shadow:0 0 0 3px rgba(92,107,192,.15)}',
+    'body.dark .gsearch-icon{color:#5c6bc0}',
+
+    // ── Cards ──
+    'body.dark .card{background:#161628;border-color:#252540;color:#d8dce6}',
+    'body.dark .card-title{color:#b0bff0}',
+    'body.dark .metric{background:#161628;border-color:#252540}',
+    'body.dark .metric-label{color:#7882a4}',
+    'body.dark .metric-val{color:#c5cff0}',
+    'body.dark .metric .metric-val{color:#c5cff0}',
+    'body.dark .metric.green .metric-val{color:#66bb6a}',
+    'body.dark .metric.amber .metric-val{color:#ffa726}',
+    'body.dark .metric.red .metric-val{color:#ef5350}',
+    'body.dark .metric-sub{color:#5c6380}',
+
+    // ── KPIs ──
+    'body.dark .kpi-card{background:#161628;border-color:#252540}',
+    'body.dark .kpi-label{color:#7882a4}',
+    'body.dark .chart-card{background:#161628;border-color:#252540}',
+    'body.dark .chart-card-title{color:#b0bff0}',
+    'body.dark .chart-card-sub{color:#5c6380}',
+
+    // ── Tabelas ──
+    'body.dark table{color:#d8dce6}',
+    'body.dark thead th{color:#7882a4;border-bottom-color:#252540}',
+    'body.dark tbody tr{border-bottom-color:#1e1e35}',
+    'body.dark tbody tr:hover{background:#1a1a30}',
+    'body.dark .rel-table th{background:#1a1a30;color:#90a4ae}',
+    'body.dark .rel-table td{border-bottom-color:#252540}',
+    'body.dark .rel-table tr:nth-child(even){background:#14142a}',
+
+    // ── Formulários ──
+    'body.dark input[type=text],body.dark input[type=date],body.dark input[type=email],' +
+    'body.dark input[type=tel],body.dark input[type=number],body.dark input[type=time],' +
+    'body.dark input[type=password],body.dark input[type=month],body.dark input[type=color],' +
+    'body.dark select,body.dark textarea{background:#1a1a30;border-color:#2d2d50;color:#d8dce6}',
+    'body.dark input:focus,body.dark select:focus,body.dark textarea:focus{border-color:#5c6bc0;box-shadow:0 0 0 3px rgba(92,107,192,.15)}',
+    'body.dark label{color:#7882a4}',
+
+    // ── Botões ──
+    'body.dark .btn-outline{background:#1a1a30;color:#64b5f6;border-color:#3949ab}',
+    'body.dark .btn-outline:hover{background:#1e1e40}',
+    'body.dark .btn-danger{background:#1a1a30;color:#ef5350;border-color:#c62828}',
+    'body.dark .btn-danger:hover{background:#2a1020}',
+
+    // ── Badges ──
+    'body.dark .badge-blue{background:#1a237e;color:#90caf9}',
+    'body.dark .badge-green{background:#1b3a1b;color:#81c784}',
+    'body.dark .badge-amber{background:#3e2a00;color:#ffb74d}',
+    'body.dark .badge-red{background:#3a1010;color:#ef9a9a}',
+    'body.dark .badge-gray{background:#252540;color:#90a4ae}',
+    'body.dark .badge-purple{background:#1a0a30;color:#ce93d8}',
+
+    // ── Appointments ──
+    'body.dark .appt-item{background:#1a1a30;border-color:#252540}',
+    'body.dark .appt-name{color:#d8dce6}',
+    'body.dark .appt-proc{color:#7882a4}',
+    'body.dark .appt-time{color:#64b5f6}',
+
+    // ── Pacientes ──
+    'body.dark .patient-row{background:#161628;border-color:#252540}',
+    'body.dark .patient-row:hover{border-color:#5c6bc0;background:#1a1a35}',
+    'body.dark .patient-name{color:#d8dce6}',
+    'body.dark .patient-sub{color:#7882a4}',
+
+    // ── Tarefas ──
+    'body.dark .task-item{background:#161628;border-color:#252540}',
+    'body.dark .task-text{color:#d8dce6}',
+    'body.dark .task-date{color:#5c6380}',
+    'body.dark .task-check{border-color:#3d3d60}',
+
+    // ── Financeiro ──
+    'body.dark .finance-row{border-bottom-color:#1e1e35}',
+    'body.dark .fin-icon.in{background:#1b3a1b;color:#66bb6a}',
+    'body.dark .fin-icon.out{background:#3a1010;color:#ef5350}',
+    'body.dark .fin-name{color:#d8dce6}',
+    'body.dark .fin-cat{color:#5c6380}',
+
+    // ── Modais ──
+    'body.dark .modal-bg{background:rgba(0,0,0,.65)}',
+    'body.dark .modal{background:#161628;color:#d8dce6}',
+    'body.dark .modal-head h3{color:#b0bff0}',
+
+    // ── Documento receita ──
+    'body.dark .receita-paper{background:#1a1a30;border-color:#252540;color:#d8dce6}',
+    'body.dark .receita-header{border-bottom-color:#3949ab}',
+    'body.dark .receita-header h2{color:#90caf9}',
+    'body.dark .receita-header p{color:#7882a4}',
+    'body.dark .receita-foot{border-top-color:#252540;color:#5c6380}',
+
+    // ── Doc cards ──
+    'body.dark .doc-card{background:#161628;border-color:#252540;color:#d8dce6}',
+    'body.dark .doc-card:hover{border-color:#5c6bc0;background:#1a1a35}',
+    'body.dark .doc-card-info h4{color:#b0bff0}',
+    'body.dark .doc-card-info p{color:#5c6380}',
+
+    // ── Sidebar user ──
+    'body.dark .sidebar-user{border-top-color:rgba(255,255,255,.06)}',
+
+    // ── Consultórios ──
+    'body.dark .clinic-card{background:#161628;border-color:#252540}',
+    'body.dark .clinic-card .clinic-icon{background:#1a237e}',
+    'body.dark .clinic-card .clinic-name{color:#b0bff0}',
+    'body.dark .clinic-card .clinic-sub{color:#5c6380}',
+
+    // ── Usuários ──
+    'body.dark .user-card{background:#161628;border-color:#252540}',
+    'body.dark .user-card.pending{background:#1a1a30;border-color:#e65100}',
+    'body.dark .user-card-name{color:#d8dce6}',
+    'body.dark .user-card-sub{color:#7882a4}',
+    'body.dark .usr-role-section{color:#5c6380;border-bottom-color:#252540}',
+
+    // ── Prontuário tabs ──
+    'body.dark .pron-tab{border-bottom-color:#252540}',
+    'body.dark .pron-tab-btn{color:#5c6380}',
+    'body.dark .pron-tab-btn.active{color:#64b5f6;border-bottom-color:#64b5f6}',
+
+    // ── Login ──
+    'body.dark .login-box{background:#161628;color:#d8dce6}',
+    'body.dark .login-logo h1{color:#90caf9}',
+    'body.dark .login-logo p{color:#5c6380}',
+    'body.dark .login-tab-btn{color:#5c6380}',
+    'body.dark .login-tab-btn.active{color:#64b5f6;border-bottom-color:#64b5f6}',
+    'body.dark .login-tabs{border-bottom-color:#252540}',
+    'body.dark .login-field label{color:#7882a4}',
+    'body.dark .login-field input{background:#1a1a30;border-color:#2d2d50;color:#d8dce6}',
+    'body.dark .login-footer{color:#3d3d60}',
+    'body.dark .pending-box{background:#161628;color:#d8dce6}',
+    'body.dark .pending-box h2{color:#90caf9}',
+    'body.dark .pending-box p{color:#7882a4}',
+
+    // ── Calendário ──
+    'body.dark .cal-day{color:#b0bff0}',
+    'body.dark .cal-day:hover{background:#1e1e40}',
+    'body.dark .cal-day.today{background:#1565C0;color:#fff}',
+    'body.dark .cal-day.selected{background:#1a237e}',
+    'body.dark .cal-day-name{color:#5c6380}',
+
+    // ── Odontograma ──
+    'body.dark .odo-tooth:hover{background:#1e1e40}',
+    'body.dark .odo-tooth.selected{background:#1a237e;box-shadow:0 0 0 2px #5c6bc0}',
+    'body.dark #odo-detail{background:#1a1a30;border-color:#252540}',
+
+    // ── Plano tratamento ──
+    'body.dark .plano-item{background:#161628;border-color:#252540}',
+    'body.dark .plano-proc{color:#d8dce6}',
+    'body.dark .plano-sub{color:#5c6380}',
+    'body.dark .plano-val{color:#90caf9}',
+
+    // ── Contas ──
+    'body.dark .conta-vencido{background:#2a1020}',
+    'body.dark .conta-hoje{background:#2a2000}',
+
+    // ── Estoque bar ──
+    'body.dark .stock-bar{background:#252540}',
+
+    // ── Conexão ──
+    'body.dark .conn-online{background:#1b3a1b;color:#66bb6a}',
+    'body.dark .conn-offline{background:#3a1010;color:#ef5350}',
+
+    // ── Notificação ──
+    'body.dark .notif{background:#3949ab}',
+
+    // ── Search results ──
+    'body.dark .gsearch-results{background:#161628;border-color:#252540}',
+    'body.dark .gsr-section{background:#1a1a30;color:#5c6380;border-bottom-color:#252540}',
+    'body.dark .gsr-item{border-bottom-color:#1e1e35}',
+    'body.dark .gsr-item:hover{background:#1a1a35}',
+    'body.dark .gsr-item-title{color:#b0bff0}',
+    'body.dark .gsr-item-sub{color:#5c6380}',
+    'body.dark .gsr-highlight{background:#3e2a00}',
+
+    // ── Reminder panel ──
+    'body.dark .reminder-panel{background:#161628;border-color:#252540}',
+    'body.dark .reminder-panel-head{border-bottom-color:#252540}',
+    'body.dark .reminder-panel-head h4{color:#b0bff0}',
+    'body.dark .reminder-item{border-bottom-color:#1e1e35}',
+    'body.dark .reminder-item:hover{background:#1a1a35}',
+    'body.dark .reminder-item.urgent{background:#2a2000;border-left-color:#ffa726}',
+    'body.dark .reminder-item.imminent{background:#2a1020;border-left-color:#ef5350}',
+    'body.dark .ri-name{color:#d8dce6}',
+    'body.dark .ri-sub{color:#5c6380}',
+
+    // ── Fluxo caixa ──
+    'body.dark .fc-period{background:#161628;border-color:#252540}',
+    'body.dark .fc-period-label{color:#7882a4}',
+    'body.dark .fc-bar{background:#252540}',
+    'body.dark .fc-bar-label{color:#5c6380}',
+
+    // ── Parcelas ──
+    'body.dark .parc-group{background:#161628;border-color:#252540}',
+    'body.dark .parc-group-title{color:#b0bff0}',
+    'body.dark .parc-group-sub{color:#5c6380}',
+    'body.dark .parc-progress{background:#252540}',
+    'body.dark .parc-item{border-bottom-color:#1e1e35}',
+    'body.dark .parc-item-n.paid{background:#1b3a1b;color:#66bb6a}',
+    'body.dark .parc-item-n.pending{background:#3e2a00;color:#ffa726}',
+    'body.dark .parc-item-n.overdue{background:#3a1010;color:#ef5350}',
+
+    // ── Semana agenda ──
+    'body.dark .week-empty{color:#3d3d60}',
+    'body.dark .week-appt:hover{filter:brightness(1.1)}',
+
+    // ── Check-in ──
+    'body.dark #checkin-panel{background:#1b2a1b;border-color:#1b3a1b}',
+    'body.dark .checkin-item{background:#161628;border-color:#252540}',
+    'body.dark .checkin-name{color:#d8dce6}',
+
+    // ── Comissões ──
+    'body.dark .com-row{background:#161628;border-color:#252540}',
+    'body.dark .com-bar{background:#252540}',
+
+    // ── Logs ──
+    'body.dark .log-item{border-bottom-color:#1e1e35}',
+    'body.dark .log-action{color:#d8dce6}',
+    'body.dark .log-meta{color:#5c6380}',
+    'body.dark .log-time{color:#3d3d60}',
+
+    // ── Perfis ──
+    'body.dark .perm-item{border-color:#252540;color:#d8dce6}',
+    'body.dark .perm-item:hover{border-color:#5c6bc0;background:#1a1a35}',
+
+    // ── Aniversariantes ──
+    'body.dark .aniv-item{background:#161628;border-color:#252540}',
+    'body.dark .aniv-item.hoje{border-color:#e65100;background:#2a1800}',
+
+    // ── Timeout overlay ──
+    'body.dark .timeout-box{background:#161628;color:#d8dce6}',
+    'body.dark .timeout-title{color:#b0bff0}',
+    'body.dark .timeout-msg{color:#5c6380}',
+
+    // ── Range search ──
+    'body.dark #range-stats .summary-grid .metric{background:#1a1a30}',
+
+    // ── Empty state ──
+    'body.dark .empty-state{color:#5c6380}',
+
+    // ── Inadimplência ──
+    'body.dark .inadimplencia-item{border-bottom-color:#1e1e35}',
+    'body.dark .inad-bar{background:#252540}',
+
+    // ── Clinic selector ──
+    'body.dark .clinic-selector{background:#1a237e;color:#90caf9;border-color:#3949ab}',
+
+    // ── Session indicator ──
+    'body.dark .session-indicator{color:#3d3d60;border-top-color:rgba(255,255,255,.05)}',
+
+    // ── Scrollbar ──
+    'body.dark ::-webkit-scrollbar{width:8px;height:8px}',
+    'body.dark ::-webkit-scrollbar-track{background:#0f0f1a}',
+    'body.dark ::-webkit-scrollbar-thumb{background:#2d2d50;border-radius:4px}',
+    'body.dark ::-webkit-scrollbar-thumb:hover{background:#3d3d60}',
+
+    // ── Theme toggle button ──
+    '.theme-toggle{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;font-size:18px;color:#546e7a;border:none;background:none;flex-shrink:0}',
+    '.theme-toggle:hover{background:#e3f2fd;color:#1565C0}',
+    'body.dark .theme-toggle{color:#90a4ae}',
+    'body.dark .theme-toggle:hover{background:#1e1e40;color:#64b5f6}',
+
+    // ── Pass toggle dark ──
+    'body.dark .pass-toggle{color:#5c6380}',
+    'body.dark .pass-toggle:hover{color:#64b5f6}'
+
+  ].join('\n');
+  document.head.appendChild(darkCSS);
+})();
+
+// — Injetar botão de toggle na topbar —
+(function() {
+  var actions = document.querySelector('.topbar-actions');
+  if (!actions) return;
+
+  var btn = document.createElement('button');
+  btn.className = 'theme-toggle';
+  btn.id = 'theme-toggle-btn';
+  btn.title = 'Alternar tema';
+  btn.innerHTML = '<i class="ti ti-moon-stars"></i>';
+  btn.onclick = toggleDarkTheme;
+
+  // Inserir antes do conn-indicator
+  var connEl = document.getElementById('conn-indicator');
+  if (connEl) actions.insertBefore(btn, connEl);
+  else actions.insertBefore(btn, actions.firstChild);
+})();
+
+// — Toggle tema escuro —
+function toggleDarkTheme() {
+  var isDark = document.body.classList.toggle('dark');
+  var btn = document.getElementById('theme-toggle-btn');
+  if (btn) {
+    btn.innerHTML = isDark ? '<i class="ti ti-sun"></i>' : '<i class="ti ti-moon-stars"></i>';
+    btn.title = isDark ? 'Tema claro' : 'Tema escuro';
+  }
+  try { localStorage.setItem('odonto_theme', isDark ? 'dark' : 'light'); } catch (e) {}
+
+  // Atualizar gráficos Chart.js para tema escuro
+  updateChartsTheme(isDark);
+}
+
+// — Carregar preferência salva —
+function loadThemePreference() {
+  try {
+    var pref = localStorage.getItem('odonto_theme');
+    if (pref === 'dark') {
+      document.body.classList.add('dark');
+      var btn = document.getElementById('theme-toggle-btn');
+      if (btn) { btn.innerHTML = '<i class="ti ti-sun"></i>'; btn.title = 'Tema claro'; }
+    }
+  } catch (e) {}
+}
+
+// — Atualizar cores dos gráficos para tema escuro —
+function updateChartsTheme(isDark) {
+  var gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+  var tickColor = isDark ? '#7882a4' : undefined;
+  var legendColor = isDark ? '#b0bff0' : undefined;
+
+  Object.keys(_charts).forEach(function(key) {
+    var chart = _charts[key];
+    if (!chart || !chart.options) return;
+
+    if (chart.options.scales) {
+      ['x', 'y'].forEach(function(axis) {
+        if (chart.options.scales[axis]) {
+          if (chart.options.scales[axis].grid) chart.options.scales[axis].grid.color = gridColor;
+          if (chart.options.scales[axis].ticks) chart.options.scales[axis].ticks.color = tickColor;
+        }
+      });
+    }
+    if (chart.options.plugins && chart.options.plugins.legend && chart.options.plugins.legend.labels) {
+      chart.options.plugins.legend.labels.color = legendColor;
+    }
+    chart.update();
+  });
+}
+
+// — Aplicar tema ao carregar —
+loadThemePreference();
+
+// — Garantir que tema é aplicado após login —
+var _themeInitApp = initApp;
+initApp = function() {
+  _themeInitApp();
+  loadThemePreference();
+};
+
+
+// ══════════════════════════════════════════════════════════════════
+console.log('%c[MELHORIA] Docs PDF + Impressão + Tema Escuro carregados', 'color:#e65100;font-weight:bold;font-size:12px');
+
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
   if(authUser){setLoginLoading(true);enterApp(authUser)}
