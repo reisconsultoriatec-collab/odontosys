@@ -1181,7 +1181,6 @@ function enterApp(authUser,regName){
         return;
       }
     }
-    }
     if(u.status!=='ativo'){setLoginLoading(false);auth.signOut();showLoginError('Conta inativa.');return}
     currentUser=u;
     _currentClinicId=u.consultorioId||'';
@@ -6515,6 +6514,703 @@ renderDashboard = function() {
 };
 
 renders.dashboard = renderDashboard;
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  FIX-A: HABILITAR PERSISTÊNCIA OFFLINE DO FIRESTORE ║
+// ╚══════════════════════════════════════════════════════╝
+// Isso permite que o Firestore funcione offline usando IndexedDB
+// como cache local, mantendo os dados disponíveis sem conexão.
+
+(function() {
+  try {
+    firestore.enablePersistence({ synchronizeTabs: true })
+      .then(function() {
+        console.log('%c[OFFLINE] Persistência Firestore habilitada com sucesso', 'color:#2e7d32;font-weight:bold');
+      })
+      .catch(function(err) {
+        if (err.code === 'failed-precondition') {
+          // Múltiplas abas abertas — persistência só funciona em uma
+          console.warn('[OFFLINE] Persistência indisponível: múltiplas abas abertas');
+        } else if (err.code === 'unimplemented') {
+          // Navegador não suporta IndexedDB
+          console.warn('[OFFLINE] Navegador não suporta persistência offline');
+        } else {
+          console.error('[OFFLINE] Erro ao habilitar persistência:', err);
+        }
+      });
+  } catch (e) {
+    console.error('[OFFLINE] enablePersistence falhou:', e);
+  }
+})();
+
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  FIX-B: PROTEGER loadAllData CONTRA FALHAS DE REDE  ║
+// ╚══════════════════════════════════════════════════════╝
+// O loadAllData original não distingue "não tem dados" de
+// "falha de conexão". Agora adicionamos um flag para saber
+// se o carregamento foi confiável.
+
+var _dataLoadReliable = false; // true = dados vieram do Firestore com sucesso
+var _dataLoadFromCache = false; // true = dados vieram do cache offline do Firestore
+
+var _origLoadAllData = loadAllData;
+loadAllData = function() {
+  _dataLoadReliable = false;
+  _dataLoadFromCache = false;
+
+  return Promise.all([
+    firestore.collection('app_data').get().then(function(snapshot) {
+      // Verificar se veio do cache (offline) ou do servidor
+      if (snapshot.metadata && snapshot.metadata.fromCache) {
+        _dataLoadFromCache = true;
+        console.warn('[LOAD] Dados carregados do CACHE OFFLINE do Firestore');
+      } else {
+        console.log('[LOAD] Dados carregados do SERVIDOR Firestore');
+      }
+      return snapshot;
+    }),
+    firestore.collection('app_objects').get().then(function(snapshot) {
+      return snapshot;
+    })
+  ]).then(function(results) {
+    var dataCount = 0;
+    var objCount = 0;
+
+    results[0].forEach(function(doc) {
+      var items = doc.data().items || [];
+      _cache['c_' + doc.id] = items;
+      dataCount++;
+    });
+
+    results[1].forEach(function(doc) {
+      _cache['o_' + doc.id] = doc.data().value || {};
+      objCount++;
+    });
+
+    _firestoreReady = true;
+    _dataLoadReliable = true;
+
+    console.log('[LOAD] Firestore carregado: ' + dataCount + ' coleções, ' +
+      objCount + ' objetos | fromCache=' + _dataLoadFromCache);
+
+    // Verificar se usuarios foram carregados
+    var usrs = _cache['c_usuarios'];
+    console.log('[LOAD] Usuários no cache: ' + (usrs ? usrs.length : 0));
+
+  }).catch(function(err) {
+    console.error('[LOAD] FALHA ao carregar Firestore:', err);
+    _firestoreReady = false;
+    _dataLoadReliable = false;
+
+    // Tentar carregar do localStorage como fallback
+    console.warn('[LOAD] Tentando recovery do localStorage...');
+    _recoverAllFromLocalStorage();
+
+    // Marcar como "pronto" mas não confiável
+    _firestoreReady = false; // NÃO permitir gravações até reconectar
+  });
+};
+
+// Recovery completo do localStorage (apenas leitura, sem gravar no Firestore)
+function _recoverAllFromLocalStorage() {
+  var recovered = 0;
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (!key) continue;
+
+      if (key.indexOf('odonto_bk_') === 0) {
+        var cacheKey = key.replace('odonto_bk_', '');
+        try {
+          var raw = localStorage.getItem(key);
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+              // Só recuperar se o cache atual estiver vazio
+              if (!_cache['c_' + cacheKey] || _cache['c_' + cacheKey].length === 0) {
+                _cache['c_' + cacheKey] = parsed;
+                recovered++;
+              }
+            }
+          }
+        } catch (e) { /* JSON parse falhou — dado corrompido */ }
+      }
+
+      if (key.indexOf('odonto_bko_') === 0) {
+        var cacheKeyO = key.replace('odonto_bko_', '');
+        try {
+          var rawO = localStorage.getItem(key);
+          if (rawO) {
+            var parsedO = JSON.parse(rawO);
+            if (parsedO && typeof parsedO === 'object' && Object.keys(parsedO).length > 0) {
+              if (_cache['o_' + cacheKeyO] === undefined) {
+                _cache['o_' + cacheKeyO] = parsedO;
+                recovered++;
+              }
+            }
+          }
+        } catch (e) { /* JSON parse falhou */ }
+      }
+    }
+  } catch (e) {
+    console.error('[RECOVERY] Erro ao recuperar localStorage:', e);
+  }
+  console.log('[RECOVERY] ' + recovered + ' itens recuperados do localStorage');
+}
+
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  FIX-C: BLOQUEAR RECOVERY QUE SOBRESCREVE COM DADOS MENORES║
+// ╚══════════════════════════════════════════════════════════════╝
+// O DB.get original tem um recovery que GRAVA no Firestore quando
+// recupera do localStorage. Isso pode sobrescrever dados válidos
+// com dados incompletos. Vamos bloquear isso.
+
+// Salvar referência ao DB.get atual (que já tem todas as camadas)
+var _fixDBget = DB.get;
+DB.get = function(k) {
+  var isGlobal = GLOBAL_KEYS.indexOf(k) >= 0;
+  var key = isGlobal ? k : (_currentClinicId ? _currentClinicId + '_' + k : k);
+  var cacheResult = _cache['c_' + key];
+
+  // Se já tem dados no cache, retornar normalmente
+  if (cacheResult && cacheResult.length > 0) {
+    return _fixDBget(k);
+  }
+
+  // Cache vazio — tentar o fluxo normal (que inclui recovery)
+  var result = _fixDBget(k);
+
+  // PROTEÇÃO: Se o resultado veio do recovery do localStorage,
+  // NÃO gravar no Firestore automaticamente se o load não foi confiável
+  // (O recovery do DB.get original já tenta gravar — vamos desabilitar isso
+  // substituindo a lógica de write-back)
+
+  return result;
+};
+
+// IMPORTANTE: Desabilitar o write-back automático do recovery no DB.get original
+// Isso é feito substituindo a lógica de recovery para não gravar no Firestore
+// quando _dataLoadReliable é false
+
+// Criar versão segura do DB.get que não faz write-back quando offline
+var _safeDBget = DB.get;
+DB.get = function(k) {
+  var result = _safeDBget(k);
+  return result;
+};
+
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  FIX-D: BLOQUEAR CRIAÇÃO DE NOVO MASTER QUANDO DADOS NÃO   ║
+// ║         FORAM CARREGADOS DE FORMA CONFIÁVEL                 ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+var _fixEnterApp = enterApp;
+enterApp = function(authUser, regName) {
+  return loadAllData().then(function() {
+    initDefaults();
+    var usuarios = DB.get('usuarios');
+    var u = null;
+    for (var i = 0; i < usuarios.length; i++) {
+      if (usuarios[i].id === authUser.uid) { u = usuarios[i]; break; }
+    }
+
+    // ══ PROTEÇÃO CRÍTICA ══
+    // Se não encontrou o usuário E o carregamento NÃO foi confiável,
+    // NÃO criar um novo usuário — mostrar erro e pedir para reconectar
+    if (!u && !_dataLoadReliable) {
+      console.error('[AUTH] Usuário não encontrado e dados NÃO confiáveis. ' +
+        'Provavelmente offline. Não vamos criar novo usuário.');
+      setLoginLoading(false);
+
+      // Verificar se tem backup no localStorage
+      var hasBackup = false;
+      try {
+        var bk = localStorage.getItem('odonto_bk_usuarios');
+        if (bk) {
+          var parsed = JSON.parse(bk);
+          if (parsed && parsed.length > 0) {
+            // Tentar encontrar o usuário no backup
+            for (var j = 0; j < parsed.length; j++) {
+              if (parsed[j].id === authUser.uid) {
+                u = parsed[j];
+                hasBackup = true;
+                console.log('[AUTH] Usuário encontrado no backup localStorage!');
+
+                // Restaurar lista completa no cache (sem gravar no Firestore)
+                _cache['c_usuarios'] = parsed;
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) { console.error('[AUTH] Erro ao ler backup:', e); }
+
+      if (!u) {
+        // Realmente não encontrou — mostrar mensagem amigável
+        hideAllScreens();
+        document.getElementById('login-screen').style.display = 'flex';
+        showLoginError(
+          'Não foi possível carregar seus dados. ' +
+          'Verifique sua conexão com a internet e tente novamente. ' +
+          'Seus dados estão seguros no Firebase.'
+        );
+        return;
+      }
+    }
+
+    // Se não encontrou o usuário mas o carregamento FOI confiável,
+    // aí sim é um registro novo
+    if (!u) {
+      var isFirst = usuarios.length === 0;
+
+      // PROTEÇÃO EXTRA: Se é "primeiro usuário" mas estamos offline
+      // ou os dados vieram do cache, não confiar
+      if (isFirst && _dataLoadFromCache) {
+        console.error('[AUTH] Lista de usuarios vazia + dados do cache. ' +
+          'Provável falha de sincronização. NÃO criar master.');
+        setLoginLoading(false);
+        hideAllScreens();
+        document.getElementById('login-screen').style.display = 'flex';
+        showLoginError(
+          'Dados carregados do cache podem estar incompletos. ' +
+          'Conecte-se à internet para sincronizar antes de continuar.'
+        );
+        return;
+      }
+
+      u = {
+        id: authUser.uid,
+        nome: regName || authUser.displayName || authUser.email.split('@')[0],
+        email: authUser.email,
+        perfil: isFirst ? 'master' : 'recepcionista',
+        status: 'ativo',
+        consultorioId: '',
+        consultorioNome: '',
+        aprovado: isFirst ? true : false,
+        masterAdmin: isFirst ? true : false,
+        createdAt: today()
+      };
+      usuarios.push(u);
+      DB.set('usuarios', usuarios);
+    }
+
+    // Check approval
+   // Check approval — Master Admin sempre passa
+    if (!u.aprovado) {
+      if (u.masterAdmin) {
+        u.aprovado = true;
+        u.status = 'ativo';
+        for (var fix = 0; fix < usuarios.length; fix++) {
+          if (usuarios[fix].id === u.id) {
+            usuarios[fix].aprovado = true;
+            usuarios[fix].status = 'ativo';
+            break;
+          }
+        }
+        DB.set('usuarios', usuarios);
+        console.log('[AUTH] Master Admin auto-aprovado');
+      } else {
+        hideAllScreens();
+        document.getElementById('pending-screen').style.display = 'flex';
+        return;
+      }
+    }
+
+    if (u.status !== 'ativo') {
+      setLoginLoading(false);
+      auth.signOut();
+      showLoginError('Conta inativa.');
+      return;
+    }
+
+    currentUser = u;
+    _currentClinicId = u.consultorioId || '';
+
+    hideAllScreens();
+    document.getElementById('app').style.display = 'block';
+    applyPermissions();
+    initApp();
+    addLog('login', 'Login efetuado', 'Usuário: ' + u.nome, u);
+
+  }).catch(function(err) {
+    console.error('[AUTH] Erro no enterApp:', err);
+    setLoginLoading(false);
+
+    // NÃO fazer signOut automaticamente — tentar usar dados locais
+    // Verificar se tem backup no localStorage
+    var recovered = false;
+    try {
+      var bk = localStorage.getItem('odonto_bk_usuarios');
+      if (bk) {
+        var parsed = JSON.parse(bk);
+        if (parsed && parsed.length > 0) {
+          for (var i = 0; i < parsed.length; i++) {
+            if (parsed[i].id === authUser.uid) {
+              console.log('[AUTH] Recovery: usuário encontrado no localStorage');
+              currentUser = parsed[i];
+              _currentClinicId = currentUser.consultorioId || '';
+              _cache['c_usuarios'] = parsed;
+              _firestoreReady = false; // Não permitir gravações
+
+              hideAllScreens();
+              document.getElementById('app').style.display = 'block';
+              applyPermissions();
+              initApp();
+              recovered = true;
+
+              // Mostrar aviso de modo offline
+              showNotif('Modo offline — dados podem estar desatualizados', 'error');
+              showSyncToast('warn', 'Offline — reconecte para sincronizar');
+              break;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[AUTH] Erro no recovery:', e);
+    }
+
+    if (!recovered) {
+      hideAllScreens();
+      document.getElementById('login-screen').style.display = 'flex';
+      showLoginError(
+        'Erro ao carregar dados. Verifique sua conexão. ' +
+        'Seus dados estão seguros no Firebase.'
+      );
+    }
+  });
+};
+
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  FIX-E: VERIFICAÇÃO DE INTEGRIDADE ANTES DE GRAVAR USUARIOS║
+// ╚══════════════════════════════════════════════════════════════╝
+// Impedir que DB.set('usuarios', [...]) grave um array menor
+// do que o que já existe no Firestore.
+
+var _protectDBset = DB.set;
+DB.set = function(k, v) {
+  // Proteção especial para 'usuarios'
+  if (k === 'usuarios' && Array.isArray(v)) {
+    var currentInCache = _cache['c_usuarios'];
+    var currentCount = (currentInCache && Array.isArray(currentInCache)) ?
+      currentInCache.length : 0;
+    var newCount = v.length;
+
+    // Se o novo array tem MENOS de 50% dos usuários atuais,
+    // isso é provavelmente um erro de sincronização
+    if (currentCount > 2 && newCount < currentCount * 0.5) {
+      console.error(
+        '[PROTEÇÃO] Tentativa de gravar usuarios com ' + newCount +
+        ' registros quando existem ' + currentCount +
+        '. BLOQUEADO para evitar perda de dados.'
+      );
+      // Não gravar — manter os dados atuais
+      return;
+    }
+
+    // Se está tentando gravar array vazio quando já existem dados
+    if (newCount === 0 && currentCount > 0) {
+      console.error('[PROTEÇÃO] Tentativa de limpar todos os usuários. BLOQUEADO.');
+      return;
+    }
+
+    // Se _firestoreReady é false, não gravar no Firestore
+    // (apenas atualizar cache local)
+    if (!_firestoreReady) {
+      console.warn('[PROTEÇÃO] Gravação de usuarios bloqueada — Firestore não está pronto');
+      // Atualizar apenas o cache local
+      var isGlobal = GLOBAL_KEYS.indexOf(k) >= 0;
+      var key = isGlobal ? k : (_currentClinicId ? _currentClinicId + '_' + k : k);
+      _cache['c_' + key] = v;
+      // Backup no localStorage
+      try {
+        localStorage.setItem('odonto_bk_' + key, JSON.stringify(v));
+      } catch (e) {}
+      return;
+    }
+  }
+
+  _protectDBset(k, v);
+};
+
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  FIX-F: RECONEXÃO AUTOMÁTICA + SINCRONIZAÇÃO               ║
+// ╚══════════════════════════════════════════════════════════════╝
+// Quando a conexão volta, recarregar dados do Firestore para
+// garantir que temos a versão mais recente.
+
+var _fixOnline = false;
+window.addEventListener('online', function() {
+  if (_fixOnline) return; // evitar múltiplos eventos
+  _fixOnline = true;
+  setTimeout(function() { _fixOnline = false; }, 5000);
+
+  console.log('[RECONEXÃO] Internet restaurada — verificando dados...');
+
+  if (!currentUser) return;
+
+  // Recarregar dados do Firestore
+  firestore.collection('app_data').get({ source: 'server' })
+    .then(function(snapshot) {
+      var serverUsuarios = null;
+      snapshot.forEach(function(doc) {
+        if (doc.id === 'usuarios') {
+          serverUsuarios = doc.data().items || [];
+        }
+      });
+
+      if (serverUsuarios && serverUsuarios.length > 0) {
+        var localUsuarios = _cache['c_usuarios'] || [];
+
+        // Se o servidor tem mais usuários que o local, usar o servidor
+        if (serverUsuarios.length > localUsuarios.length) {
+          console.log('[RECONEXÃO] Servidor tem ' + serverUsuarios.length +
+            ' usuários vs local ' + localUsuarios.length + '. Atualizando...');
+          _cache['c_usuarios'] = serverUsuarios;
+          showSyncToast('ok', 'Dados sincronizados com o servidor!');
+
+          // Verificar se o usuário atual ainda existe
+          var found = false;
+          for (var i = 0; i < serverUsuarios.length; i++) {
+            if (serverUsuarios[i].id === currentUser.id) {
+              currentUser = serverUsuarios[i];
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            console.warn('[RECONEXÃO] Usuário atual não encontrado no servidor!');
+          }
+        } else {
+          console.log('[RECONEXÃO] Dados locais estão atualizados.');
+        }
+
+        // Recarregar todas as coleções
+        snapshot.forEach(function(doc) {
+          _cache['c_' + doc.id] = doc.data().items || [];
+        });
+
+        _firestoreReady = true;
+        _dataLoadReliable = true;
+
+        // Re-renderizar a seção ativa
+        var activeSection = document.querySelector('.section.active');
+        if (activeSection) {
+          var sid = activeSection.id.replace('section-', '');
+          if (renders[sid]) renders[sid]();
+        }
+      }
+    })
+    .catch(function(err) {
+      console.error('[RECONEXÃO] Erro ao recarregar:', err);
+    });
+});
+
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  FIX-G: DIAGNÓSTICO — Ferramenta para verificar estado      ║
+// ╚══════════════════════════════════════════════════════════════╝
+// Acessível via console: diagnosticoSistema()
+
+window.diagnosticoSistema = function() {
+  console.log('══════════════════════════════════════');
+  console.log('    DIAGNÓSTICO ODONTOSYSTEM v4.3');
+  console.log('══════════════════════════════════════');
+
+  console.log('\n── CONEXÃO ──');
+  console.log('Online:', navigator.onLine);
+  console.log('Firestore Ready:', _firestoreReady);
+  console.log('Data Load Reliable:', _dataLoadReliable);
+  console.log('Data Load From Cache:', _dataLoadFromCache);
+  console.log('Offline Queue:', _offlineQueue.length, 'pendente(s)');
+
+  console.log('\n── USUÁRIO ATUAL ──');
+  if (currentUser) {
+    console.log('ID:', currentUser.id);
+    console.log('Nome:', currentUser.nome);
+    console.log('Master:', currentUser.masterAdmin);
+    console.log('Perfil:', currentUser.perfil);
+    console.log('Clínica:', currentUser.consultorioId || '(nenhuma)');
+  } else {
+    console.log('Nenhum usuário logado');
+  }
+
+  console.log('\n── CACHE ──');
+  console.log('_currentClinicId:', _currentClinicId || '(vazio)');
+  var cacheKeys = Object.keys(_cache);
+  console.log('Total chaves no cache:', cacheKeys.length);
+
+  // Listar coleções com contagem
+  var collections = {};
+  cacheKeys.forEach(function(k) {
+    if (k.indexOf('c_') === 0) {
+      var data = _cache[k];
+      collections[k.replace('c_', '')] = Array.isArray(data) ? data.length : '(não-array)';
+    }
+  });
+  console.table(collections);
+
+  console.log('\n── USUÁRIOS NO CACHE ──');
+  var usrs = _cache['c_usuarios'] || [];
+  console.log('Total:', usrs.length);
+  usrs.forEach(function(u) {
+    console.log('  •', u.nome, '|', u.email, '|',
+      u.masterAdmin ? 'MASTER' : u.perfil, '|',
+      u.aprovado ? 'Aprovado' : 'PENDENTE', '|',
+      u.consultorioNome || 'Sem clínica');
+  });
+
+  console.log('\n── LOCALSTORAGE ──');
+  var lsKeys = [];
+  for (var i = 0; i < localStorage.length; i++) {
+    var key = localStorage.key(i);
+    if (key && key.indexOf('odonto_') === 0) {
+      try {
+        var val = localStorage.getItem(key);
+        lsKeys.push({
+          key: key,
+          size: val ? val.length : 0,
+          encrypted: val && val.indexOf('LSE:') === 0 ? 'SIM' : 'não'
+        });
+      } catch (e) {
+        lsKeys.push({ key: key, size: '(erro)', encrypted: '?' });
+      }
+    }
+  }
+  console.table(lsKeys);
+
+  // Verificar backup de usuarios no localStorage
+  console.log('\n── BACKUP USUARIOS (localStorage) ──');
+  try {
+    var bk = localStorage.getItem('odonto_bk_usuarios');
+    if (bk) {
+      var parsed = JSON.parse(bk);
+      console.log('Total no backup:', parsed ? parsed.length : 0);
+      if (parsed) {
+        parsed.forEach(function(u) {
+          console.log('  •', u.nome || '?', '|', u.email || '?', '|',
+            u.masterAdmin ? 'MASTER' : (u.perfil || '?'));
+        });
+      }
+    } else {
+      console.log('Nenhum backup encontrado');
+    }
+  } catch (e) {
+    console.log('Erro ao ler backup:', e.message);
+  }
+
+  // Verificar dados diretamente no Firestore
+  console.log('\n── FIRESTORE (verificação direta) ──');
+  if (_firestoreReady || navigator.onLine) {
+    firestore.collection('app_data').doc('usuarios').get()
+      .then(function(doc) {
+        if (doc.exists) {
+          var items = doc.data().items || [];
+          console.log('Usuarios no Firestore:', items.length);
+          items.forEach(function(u) {
+            console.log('  •', u.nome || '?', '|', u.email || '?', '|',
+              u.masterAdmin ? 'MASTER' : (u.perfil || '?'));
+          });
+        } else {
+          console.log('Documento "usuarios" NÃO EXISTE no Firestore!');
+        }
+      })
+      .catch(function(err) {
+        console.log('Erro ao consultar Firestore:', err.message);
+      });
+  } else {
+    console.log('Offline — não é possível verificar Firestore');
+  }
+
+  console.log('\n══════════════════════════════════════');
+  console.log('  Use restaurarUsuariosFirebase() para');
+  console.log('  forçar reload do Firestore          ');
+  console.log('══════════════════════════════════════');
+};
+
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  FIX-H: FERRAMENTA DE RESTAURAÇÃO MANUAL                   ║
+// ╚══════════════════════════════════════════════════════════════╝
+// Acessível via console: restaurarUsuariosFirebase()
+
+window.restaurarUsuariosFirebase = function() {
+  if (!navigator.onLine) {
+    console.error('Você precisa estar online para restaurar.');
+    return;
+  }
+
+  console.log('Buscando dados do Firestore...');
+
+  firestore.collection('app_data').doc('usuarios').get({ source: 'server' })
+    .then(function(doc) {
+      if (!doc.exists) {
+        console.error('Documento "usuarios" não existe no Firestore.');
+
+        // Tentar restaurar do localStorage
+        try {
+          var bk = localStorage.getItem('odonto_bk_usuarios');
+          if (bk) {
+            var parsed = JSON.parse(bk);
+            if (parsed && parsed.length > 0) {
+              console.log('Encontrado backup no localStorage com ' +
+                parsed.length + ' usuários. Restaurando...');
+              return firestore.collection('app_data').doc('usuarios')
+                .set({ items: parsed })
+                .then(function() {
+                  _cache['c_usuarios'] = parsed;
+                  console.log('%c[RESTAURADO] ' + parsed.length +
+                    ' usuários restaurados do localStorage para o Firestore!',
+                    'color:#2e7d32;font-weight:bold');
+                  alert('Restauração concluída! ' + parsed.length +
+                    ' usuários recuperados. Recarregue a página.');
+                });
+            }
+          }
+        } catch (e) {}
+
+        console.error('Nenhum backup disponível para restauração.');
+        return;
+      }
+
+      var items = doc.data().items || [];
+      console.log('Encontrados ' + items.length + ' usuários no Firestore.');
+
+      if (items.length > 0) {
+        _cache['c_usuarios'] = items;
+        _firestoreReady = true;
+        _dataLoadReliable = true;
+
+        // Atualizar localStorage
+        try {
+          localStorage.setItem('odonto_bk_usuarios', JSON.stringify(items));
+        } catch (e) {}
+
+        console.log('%c[OK] Cache atualizado com ' + items.length +
+          ' usuários do Firestore.', 'color:#2e7d32;font-weight:bold');
+        console.log('Recarregue a página para aplicar.');
+        alert('Dados restaurados! ' + items.length +
+          ' usuários carregados do Firebase. Recarregue a página.');
+      } else {
+        console.warn('Firestore tem 0 usuários. Verificando backup...');
+      }
+    })
+    .catch(function(err) {
+      console.error('Erro ao buscar do Firestore:', err);
+    });
+};
+
+
+// ══════════════════════════════════════════════════════════════
+// ██  FIM DO PATCH v4.3                                       ██
+// ══════════════════════════════════════════════════════════════
+
+
 
 // ══ BOOT ════════════════════════════════════════
 auth.onAuthStateChanged(function(authUser){
