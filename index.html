@@ -1161,11 +1161,26 @@ function enterApp(authUser,regName){
       u={id:authUser.uid,nome:regName||authUser.displayName||authUser.email.split('@')[0],email:authUser.email,perfil:isFirst?'master':'recepcionista',status:'ativo',consultorioId:'',consultorioNome:'',aprovado:isFirst?true:false,masterAdmin:isFirst?true:false,createdAt:today()};
       usuarios.push(u);DB.set('usuarios',usuarios);
     }
-    // Check approval
-    if(!u.aprovado){
-      hideAllScreens();
-      document.getElementById('pending-screen').style.display='flex';
-      return;
+   // Check approval — Master Admin sempre passa
+    if (!u.aprovado) {
+      if (u.masterAdmin) {
+        u.aprovado = true;
+        u.status = 'ativo';
+        for (var fix = 0; fix < usuarios.length; fix++) {
+          if (usuarios[fix].id === u.id) {
+            usuarios[fix].aprovado = true;
+            usuarios[fix].status = 'ativo';
+            break;
+          }
+        }
+        DB.set('usuarios', usuarios);
+        console.log('[AUTH] Master Admin auto-aprovado');
+      } else {
+        hideAllScreens();
+        document.getElementById('pending-screen').style.display = 'flex';
+        return;
+      }
+    }
     }
     if(u.status!=='ativo'){setLoginLoading(false);auth.signOut();showLoginError('Conta inativa.');return}
     currentUser=u;
