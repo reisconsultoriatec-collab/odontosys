@@ -2201,10 +2201,47 @@ function syncUserProfile(){
     masterAdmin:currentUser.masterAdmin||false,
     perfil:currentUser.perfil||'',
     status:currentUser.status||'ativo',
+    aprovado:currentUser.aprovado||false,
     email:currentUser.email||'',
     updatedAt:new Date().toISOString()
   }).catch(function(err){console.error('syncUserProfile error:',err)});
 }
+
+// — Migração: sincronizar TODOS os user_profiles (rodar como master) —
+function syncAllUserProfiles() {
+  if (!currentUser || !_firestoreReady) {
+    console.warn('[MIGRATION] Não é possível migrar: firestoreReady=' + _firestoreReady);
+    return;
+  }
+  var usuarios = DB.get('usuarios');
+  if (!usuarios || !usuarios.length) {
+    console.warn('[MIGRATION] Nenhum usuário encontrado');
+    return;
+  }
+  var count = 0;
+  var batch = firestore.batch();
+  for (var i = 0; i < usuarios.length; i++) {
+    var u = usuarios[i];
+    var ref = firestore.collection('user_profiles').doc(u.id);
+    batch.set(ref, {
+      clinicId: u.consultorioId || '',
+      masterAdmin: u.masterAdmin || false,
+      perfil: u.perfil || '',
+      status: u.status || 'ativo',
+      aprovado: u.aprovado !== undefined ? u.aprovado : true,
+      email: u.email || '',
+      updatedAt: new Date().toISOString()
+    });
+    count++;
+  }
+  batch.commit().then(function() {
+    console.log('[MIGRATION] ✓ ' + count + ' user_profiles sincronizados com sucesso');
+    showNotif(count + ' perfis sincronizados!', 'success');
+  }).catch(function(e) {
+    console.error('[MIGRATION] Erro:', e);
+  });
+}
+window.syncAllUserProfiles = syncAllUserProfiles;
 
 // — Hook initApp para iniciar timeout e sincronizar perfil —
 var _origInitApp2=initApp;
@@ -2212,6 +2249,20 @@ initApp=function(){
   _origInitApp2();
   startSessionTimer();
   syncUserProfile();
+  // Auto-migrar todos os user_profiles na primeira vez que o master logar
+  if (currentUser && currentUser.masterAdmin && _firestoreReady) {
+    firestore.collection('user_profiles').doc(currentUser.id).get()
+      .then(function(doc) {
+        if (!doc.exists) {
+          console.log('[MIGRATION] user_profiles não encontrado — executando migração automática...');
+          syncAllUserProfiles();
+        }
+      })
+      .catch(function() {
+        // Se der erro ao verificar, tentar migrar mesmo assim
+        syncAllUserProfiles();
+      });
+  }
 };
 
 // ══ PERFIS AVANÇADOS + SELETOR CONSULTÓRIO ══════
@@ -6694,7 +6745,15 @@ DB.get = function(k) {
 // ╚══════════════════════════════════════════════════════════════╝
 
 var _fixEnterApp = enterApp;
+var _registrationInProgress = false; // Flag para evitar bloqueio duplo
 enterApp = function(authUser, regName) {
+  // Se é chamada de registro, marcar flag
+  if (regName) _registrationInProgress = true;
+
+  // Se onAuthStateChanged chamou enterApp logo após um registro,
+  // tratar como registro em andamento
+  var _isRegistrationContext = !!regName || _registrationInProgress;
+
   return loadAllData().then(function() {
     initDefaults();
     var usuarios = DB.get('usuarios');
@@ -6705,8 +6764,11 @@ enterApp = function(authUser, regName) {
 
     // ══ PROTEÇÃO CRÍTICA ══
     // Se não encontrou o usuário E o carregamento NÃO foi confiável,
-    // NÃO criar um novo usuário — mostrar erro e pedir para reconectar
-    if (!u && !_dataLoadReliable) {
+    // NÃO criar um novo usuário — EXCETO se for um registro novo (regName presente)
+    // Registro novo: o usuário acabou de ser criado no Firebase Auth mas ainda não
+    // existe no Firestore, então é esperado que as Security Rules bloqueiem a leitura.
+    var _isNewRegistration = _isRegistrationContext;
+    if (!u && !_dataLoadReliable && !_isNewRegistration) {
       console.error('[AUTH] Usuário não encontrado e dados NÃO confiáveis. ' +
         'Provavelmente offline. Não vamos criar novo usuário.');
       setLoginLoading(false);
@@ -6753,7 +6815,10 @@ enterApp = function(authUser, regName) {
       var isFirst = usuarios.length === 0;
 
       // PROTEÇÃO EXTRA: Se é "primeiro usuário" mas estamos offline
-      // ou os dados vieram do cache, não confiar
+      // ou os dados vieram do cache, não confiar — EXCETO em registro novo
+      // Em registro novo com falha de permissão, isFirst pode ser falso-positivo
+      // porque os dados não carregaram. Nesse caso, sempre tratar como NÃO-first
+      // para não criar master indevido.
       if (isFirst && _dataLoadFromCache) {
         console.error('[AUTH] Lista de usuarios vazia + dados do cache. ' +
           'Provável falha de sincronização. NÃO criar master.');
@@ -6765,6 +6830,13 @@ enterApp = function(authUser, regName) {
           'Conecte-se à internet para sincronizar antes de continuar.'
         );
         return;
+      }
+
+      // Se é registro novo mas o load falhou (Security Rules bloquearam),
+      // não confiar no isFirst — forçar como não-first para segurança
+      if (_isNewRegistration && !_dataLoadReliable && isFirst) {
+        console.warn('[AUTH] Registro novo com load falho — forçando isFirst=false por segurança');
+        isFirst = false;
       }
 
       u = {
@@ -6781,7 +6853,51 @@ enterApp = function(authUser, regName) {
       };
       usuarios.push(u);
       DB.set('usuarios', usuarios);
+
+      // ══ FIX-REG: Gravação direta para novos registros ══
+      // Quando o load falhou por Security Rules (novo usuário sem permissão de leitura),
+      // _firestoreReady é false e DB.set não grava no Firestore.
+      // Fazemos uma gravação direta para garantir que o usuário seja persistido.
+      if (_isNewRegistration && !_firestoreReady) {
+        console.log('[AUTH] Registro novo: tentando gravação direta no Firestore...');
+
+        // 1. Gravar user_profiles PRIMEIRO (necessário para Security Rules)
+        var profileData = {
+          clinicId: u.consultorioId || '',
+          masterAdmin: u.masterAdmin || false,
+          perfil: u.perfil || '',
+          status: u.status || 'ativo',
+          aprovado: u.aprovado || false,
+          email: u.email || '',
+          updatedAt: new Date().toISOString()
+        };
+        firestore.collection('user_profiles').doc(authUser.uid).set(profileData)
+          .then(function() {
+            console.log('[AUTH] ✓ user_profiles criado com sucesso');
+            // 2. Agora gravar usuarios no app_data
+            return firestore.collection('app_data').doc('usuarios').set({
+              items: JSON.parse(JSON.stringify(usuarios))
+            });
+          })
+          .then(function() {
+            console.log('[AUTH] ✓ Novo usuário gravado no Firestore com sucesso');
+            _firestoreReady = true;
+            _dataLoadReliable = true;
+          })
+          .catch(function(e) {
+            console.warn('[AUTH] Gravação direta falhou (Security Rules?):', e.message);
+            // Salvar no localStorage como backup para sync posterior
+            try {
+              localStorage.setItem('odonto_bk_usuarios', JSON.stringify(usuarios));
+              localStorage.setItem('odonto_pending_registration', JSON.stringify(u));
+              console.log('[AUTH] Usuário salvo no localStorage para sync posterior');
+            } catch(le) { console.error('[AUTH] Erro localStorage:', le); }
+          });
+      }
     }
+
+    // Limpar flag de registro em andamento
+    _registrationInProgress = false;
 
     // Check approval
     if (!u.aprovado) {
@@ -6968,6 +7084,31 @@ window.addEventListener('online', function() {
 
         _firestoreReady = true;
         _dataLoadReliable = true;
+
+        // ══ SYNC REGISTRO PENDENTE ══
+        try {
+          var pendingReg = localStorage.getItem('odonto_pending_registration');
+          if (pendingReg) {
+            var pendingUser = JSON.parse(pendingReg);
+            var currentUsers = _cache['c_usuarios'] || [];
+            var alreadyExists = false;
+            for (var pr = 0; pr < currentUsers.length; pr++) {
+              if (currentUsers[pr].id === pendingUser.id) { alreadyExists = true; break; }
+            }
+            if (!alreadyExists) {
+              currentUsers.push(pendingUser);
+              _cache['c_usuarios'] = currentUsers;
+            }
+            firestore.collection('app_data').doc('usuarios').set({
+              items: JSON.parse(JSON.stringify(currentUsers))
+            }).then(function() {
+              localStorage.removeItem('odonto_pending_registration');
+              console.log('[SYNC] ✓ Registro pendente sincronizado com sucesso');
+            }).catch(function(e) {
+              console.warn('[SYNC] Falha ao sincronizar registro pendente:', e.message);
+            });
+          }
+        } catch(pe) { console.error('[SYNC] Erro registro pendente:', pe); }
 
         // Re-renderizar a seção ativa
         var activeSection = document.querySelector('.section.active');
