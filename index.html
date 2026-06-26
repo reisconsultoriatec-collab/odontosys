@@ -6747,6 +6747,12 @@ DB.get = function(k) {
 var _fixEnterApp = enterApp;
 var _registrationInProgress = false; // Flag para evitar bloqueio duplo
 enterApp = function(authUser, regName) {
+  // ══ RESETAR SESSION TIMER ══
+  // Crítico: doLogout zera _lastActivity=0, e o FIX-D não chama
+  // o enterApp original (que teria touchActivity). Sem isso,
+  // isSessionExpired() retorna true imediatamente após re-login.
+  if (typeof touchActivity === 'function') touchActivity();
+
   // Se é chamada de registro, marcar flag
   if (regName) _registrationInProgress = true;
 
@@ -6915,6 +6921,13 @@ enterApp = function(authUser, regName) {
 
     currentUser = u;
     _currentClinicId = u.consultorioId || '';
+
+    // ══ ISOLAMENTO POR CLÍNICA (não-master) ══
+    // O override original de segurança (linha ~2770) é bypassed pelo FIX-D,
+    // então replicamos a lógica aqui
+    if (!u.masterAdmin) {
+      _currentClinicId = u.consultorioId || '__sem_consultorio__';
+    }
 
     hideAllScreens();
     document.getElementById('app').style.display = 'block';
